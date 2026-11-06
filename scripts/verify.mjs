@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
@@ -28,21 +29,50 @@ async function eventually(predicate, label) {
   assert.fail(label);
 }
 
-async function open(route, theme = null) {
+async function open(route, theme = null, options = {}) {
   const console = new VirtualConsole();
   console.on('jsdomError', error => errors.push({ route, message: error.message }));
   console.on('error', (...args) => errors.push({ route, message: args.map(String).join(' ') }));
   const dom = new JSDOM(html, { url: `https://elevon.test${route}`, runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: console });
   const { window } = dom;
-  window.matchMedia = query => ({
-    matches: query.includes('min-width') ? false : query.includes('max-width') ? true : false,
-    media: query, onchange: null, addEventListener() {}, removeEventListener() {},
-    addListener() {}, removeListener() {}, dispatchEvent() { return true; },
-  });
-  window.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
+  const mediaQueries = new Map();
+  window.matchMedia = query => {
+    if (!mediaQueries.has(query)) {
+      const listeners = new Set();
+      mediaQueries.set(query, {
+        matches: query.includes('prefers-reduced-motion') ? Boolean(options.reducedMotion) : query.includes('min-width') ? false : query.includes('max-width') ? true : false,
+        media: query, onchange: null,
+        addEventListener(_event, listener) { listeners.add(listener); },
+        removeEventListener(_event, listener) { listeners.delete(listener); },
+        addListener(listener) { listeners.add(listener); }, removeListener(listener) { listeners.delete(listener); },
+        dispatchEvent() { return true; },
+        change(matches) { this.matches = matches; for (const listener of listeners) listener({ matches, media: query }); },
+      });
+    }
+    return mediaQueries.get(query);
+  };
+  const observers = [];
+  window.IntersectionObserver = class {
+    constructor(callback, settings) { this.callback = callback; this.settings = settings; this.targets = new Set(); observers.push(this); }
+    observe(target) { this.targets.add(target); }
+    unobserve(target) { this.targets.delete(target); }
+    disconnect() { this.targets.clear(); }
+    emit(target, isIntersecting, bounds = target.getBoundingClientRect()) {
+      if (!this.targets.has(target)) return false;
+      this.callback([{ target, isIntersecting, intersectionRatio: isIntersecting ? 1 : 0, boundingClientRect: bounds, intersectionRect: isIntersecting ? bounds : {}, rootBounds: { top: 0, bottom: 768, width: 1024, height: 768 }, time: window.performance.now() }], this);
+      return true;
+    }
+  };
+  if (options.missingObserver) delete window.IntersectionObserver;
+  if (options.positiveBounds) window.HTMLElement.prototype.getBoundingClientRect = function () {
+    return { x: 0, y: 1200, top: 1200, left: 0, right: 320, bottom: 1380, width: 320, height: 180, toJSON() {} };
+  };
+  dom.observers = observers;
+  dom.mediaQueries = mediaQueries;
   window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   window.scrollTo = () => {};
-  window.HTMLElement.prototype.scrollIntoView = () => {};
+  dom.scrollCalls = [];
+  window.HTMLElement.prototype.scrollIntoView = function (settings) { dom.scrollCalls.push({ id: this.id, settings }); };
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   if (theme) window.localStorage.setItem('elevon-theme', theme);
@@ -185,6 +215,111 @@ for (const route of ['/produtos/oferta-inexistente', '/caminho-inexistente']) {
   dom.window.close();
 }
 messages.push('Unknown product and unknown page have recovery links');
+
+// Render the actual reusable component without running effects: motion is enhancement,
+// so markup must remain readable before browser capability and layout are known.
+{
+  const rendered = await build({
+    stdin: { contents: `import {createElement} from 'react'; import {renderToStaticMarkup} from 'react-dom/server'; import Reveal from './src/components/RevealOnScroll'; export const html = renderToStaticMarkup(createElement(Reveal, {as: 'article'}, createElement('a', {href: '/produtos'}, 'Conteúdo disponível')));`, resolveDir: project, loader: 'tsx' },
+    bundle: true, platform: 'node', format: 'cjs', packages: 'external',
+    loader: { '.css': 'empty' }, write: false, logLevel: 'silent', jsx: 'automatic',
+  });
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', rendered.outputFiles[0].text)(createRequire(path.join(project, 'package.json')), module, module.exports);
+  check(module.exports.html.includes('Conteúdo disponível'), 'Reveal renders meaningful initial content');
+  check(!module.exports.html.includes('data-reveal-state='), 'Initial reveal markup has no opacity-hiding state');
+}
+
+{
+  const dom = await open('/sobre', null, { positiveBounds: true });
+  const panels = $$(dom, '.about-intro-grid > article[data-reveal]');
+  equal(panels.length, 2, 'About panels preserve semantic articles with individual reveals');
+  check(!$(dom, 'h1').closest('[data-reveal-state="pending"]'), 'Critical information-page headline remains initially visible');
+  check(panels.every(panel => panel.dataset.revealState === 'pending'), 'Positive offscreen geometry arms reveal elements');
+  check(panels.every(panel => !panel.hasAttribute('aria-hidden') && !panel.hasAttribute('hidden')), 'Pending motion does not hide semantic content from assistive technology');
+  const observer = dom.observers.find(item => item.targets.has(panels[0]));
+  check(observer, 'Offscreen panel has a visibility observer');
+  observer.emit(panels[0], true);
+  equal(panels[0].dataset.revealState, 'entering', 'Intersection starts reveal');
+  equal(panels[1].dataset.revealState, 'pending', 'An unrelated offscreen panel remains pending');
+  panels[0].dispatchEvent(new dom.window.Event('animationend', { bubbles: true }));
+  equal(panels[0].dataset.revealState, 'visible', 'Animation completion leaves content visible');
+  check(!observer.targets.has(panels[0]), 'Completed reveal stops observing');
+  observer.emit(panels[0], false);
+  equal(panels[0].dataset.revealState, 'visible', 'Completed reveal does not replay on exit');
+  const focusTarget = $(dom, '.commitment a');
+  const focusPanel = focusTarget.closest('[data-reveal]');
+  equal(focusPanel.dataset.revealState, 'pending', 'Keyboard target begins in an offscreen pending panel');
+  focusTarget.focus();
+  equal(focusPanel.dataset.revealState, 'visible', 'Keyboard focus reveals content immediately');
+  dom.mediaQueries.get('(prefers-reduced-motion: reduce)').change(true);
+  check($$(dom, '[data-reveal]').every(panel => panel.dataset.revealState === 'visible'), 'Changing motion preference reveals all pending content');
+  dom.window.close();
+}
+
+{
+  const dom = await open('/sobre', null, { positiveBounds: true });
+  const aboutPage = $(dom, '.about-page');
+  const previousTargets = dom.observers.flatMap(observer => [...observer.targets]).filter(target => aboutPage.contains(target));
+  check(previousTargets.length > 0, 'Cleanup scenario includes actively observed pending information panels');
+  await click(dom, $(dom, '.desktop-nav a[href="/redes"]'));
+  await eventually(() => dom.window.location.pathname === '/redes', 'Leave information route');
+  await eventually(() => previousTargets.every(target => dom.observers.every(observer => !observer.targets.has(target))), 'Information-page observers release old pending targets after navigation');
+  check(previousTargets.every(target => !target.isConnected), 'Previous information panels leave the document on navigation');
+  dom.window.close();
+}
+
+for (const options of [{ reducedMotion: true, positiveBounds: true }, { missingObserver: true, positiveBounds: true }]) {
+  const dom = await open('/sobre', 'light', options);
+  check($$(dom, '[data-reveal]').length >= 6, 'Information page contains progressive reveal targets');
+  check($$(dom, '[data-reveal]').every(panel => panel.dataset.revealState === 'visible'), options.reducedMotion ? 'Reduced motion keeps all content immediately visible' : 'Observer-unavailable fallback keeps content immediately visible');
+  equal(dom.window.document.documentElement.dataset.theme, 'light', 'Motion fallback preserves light theme');
+  dom.window.close();
+}
+messages.push('Reveal initial markup, independent offscreen entrances, once-only completion, keyboard access, reduced-motion preference and observer-unavailable fallback');
+
+{
+  const dom = await open('/produtos/ia-academy', null, { positiveBounds: true });
+  const nav = $(dom, 'nav.section-navigation');
+  check(nav, 'Product sections use accessible anchor navigation');
+  const ids = ['visao-geral', 'como-funciona', 'temas', 'para-quem', 'perguntas'];
+  equal($$(dom, 'nav.section-navigation a').map(link => link.getAttribute('href')), ids.map(id => '#' + id), 'Every section anchor matches its existing destination');
+  const rectangle = (top, height = 180) => ({ x: 0, y: top, top, left: 0, right: 320, bottom: top + height, width: 320, height, toJSON() {} });
+  $(dom, '.site-header').getBoundingClientRect = () => rectangle(0, 69);
+  nav.getBoundingClientRect = () => rectangle(69, 52);
+  let positions = [-600, -100, 100, 400, 700];
+  ids.forEach((id, index) => { $(dom, '#' + id).getBoundingClientRect = () => rectangle(positions[index]); });
+  dom.window.dispatchEvent(new dom.window.Event('resize'));
+  await eventually(() => $(dom, 'nav.section-navigation [aria-current="location"]')?.getAttribute('href') === '#temas', 'Section navigation initializes from the current document position');
+  const observer = [...dom.observers].reverse().find(item => item.settings.threshold === 0 && item.targets.has($(dom, '#temas')));
+  check(observer, 'Section navigation uses an intersection observer');
+  positions = [-900, -500, -200, 100, 500];
+  observer.emit($(dom, '#para-quem'), true);
+  await eventually(() => $(dom, 'nav.section-navigation [aria-current="location"]')?.getAttribute('href') === '#para-quem', 'Section navigation follows forward scrolling');
+  equal($$(dom, 'nav.section-navigation [aria-current="location"]').length, 1, 'Only one section is active');
+  positions = [100, 400, 700, 1000, 1300];
+  observer.emit($(dom, '#visao-geral'), true);
+  await eventually(() => $(dom, 'nav.section-navigation [aria-current="location"]')?.getAttribute('href') === '#visao-geral', 'Section navigation follows upward scrolling');
+  await click(dom, $(dom, 'nav.section-navigation a[href="#perguntas"]'));
+  await eventually(() => dom.window.location.hash === '#perguntas', 'Native section link updates the URL hash');
+  await eventually(() => dom.scrollCalls.some(call => call.id === 'perguntas'), 'Anchor navigation reaches its destination');
+  equal(dom.scrollCalls.findLast(call => call.id === 'perguntas').settings.behavior, 'smooth', 'Anchor navigation is smooth when motion is allowed');
+  const detailPage = $(dom, '.product-detail-page');
+  const previousTargets = dom.observers.flatMap(observer => [...observer.targets]).filter(target => detailPage.contains(target));
+  check(previousTargets.length > 0, 'Cleanup scenario includes actively observed pending product sections');
+  await click(dom, $(dom, '.desktop-nav a[href="/sobre"]'));
+  await eventually(() => dom.window.location.pathname === '/sobre', 'Leave product route');
+  await eventually(() => previousTargets.every(target => dom.observers.every(observer => !observer.targets.has(target))), 'Section and reveal observers clean up after route disposal');
+  check(previousTargets.every(target => !target.isConnected), 'Previous product sections leave the document on navigation');
+  dom.window.close();
+  const reduced = await open('/produtos/ia-academy', null, { reducedMotion: true });
+  await click(reduced, $(reduced, 'nav.section-navigation a[href="#perguntas"]'));
+  await eventually(() => reduced.scrollCalls.some(call => call.id === 'perguntas'), 'Reduced-motion anchor reaches its destination');
+  equal(reduced.scrollCalls.findLast(call => call.id === 'perguntas').settings.behavior, 'instant', 'Reduced motion avoids animated anchor scrolling');
+  reduced.window.close();
+}
+messages.push('Scroll-aware product navigation forward/upward, one active section, valid native anchors, smooth/reduced-motion navigation and observer cleanup');
+
 equal(errors, [], 'No React runtime or jsdom execution errors');
 console.log(`PASS: ${assertions} assertions. DOM integration checks; no browser rendering or Core Web Vitals measurement.`);
 for (const message of messages) console.log(`  ✓ ${message}`);
