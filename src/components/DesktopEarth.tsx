@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { createEarthRotationLoop, createEarthQualityGovernor, getEarthRenderProfile, EARTH_FRAME_TARGETS, EARTH_ANGULAR_VELOCITY, type EarthConnection } from './earthRuntime';
 
-type Props = { onReady: () => void; onFailure: () => void };
+type Props = { onReady: () => void; onFailure: (reason?: string) => void };
 const vertexShader = `
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -94,20 +94,26 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
     let inView = false;
     let hasSize = false;
     let shaderFailed = false;
+    let renderedFrames = 0;
+    let diagnosticTime = -Infinity;
     let observer: IntersectionObserver | undefined;
     let resize: ResizeObserver | undefined;
     let loop: ReturnType<typeof createEarthRotationLoop> | undefined;
     const textures: THREE.Texture[] = [];
     const materials: THREE.Material[] = [];
     const geometries: THREE.BufferGeometry[] = [];
-    const fail = () => {
+    const fail = (reason = 'initialization') => {
       if (disposed || failed) return;
       failed = true;
       loop?.setActive(false);
-      callbacks.current.onFailure();
+      element.dataset.earthState = 'failed:' + reason;
+      callbacks.current.onFailure(reason);
     };
-    const sync = () => loop?.setActive(!failed && inView && hasSize && !document.hidden);
-    const onContextLost = (event: Event) => { event.preventDefault(); fail(); };
+    const sync = () => {
+      element.dataset.earthState = failed ? 'failed' : !hasSize ? 'waiting-size' : document.hidden ? 'hidden' : !inView ? 'offscreen' : 'running';
+      loop?.setActive(!failed && inView && hasSize && !document.hidden);
+    };
+    const onContextLost = (event: Event) => { event.preventDefault(); fail('context'); };
     const baseTilt = 14 * Math.PI / 180;
     let pointerTilt = 0;
     let pointerLean = 0;
@@ -175,7 +181,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
           getTargetFps: () => EARTH_FRAME_TARGETS[quality()],
           requestFrame: callback => window.requestAnimationFrame(callback),
           cancelFrame: handle => window.cancelAnimationFrame(handle),
-          onError: fail,
+          onError: error => fail(error instanceof Error && ['shader','context','performance'].includes(error.message) ? error.message : 'frame'),
           onFrame: ({ angle, deltaSeconds, now, intervalMs }) => {
             globe.rotation.y = angle;
             const damping = 1 - Math.exp(-3.8 * deltaSeconds);
@@ -184,10 +190,16 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
             cloudMesh.rotation.y += deltaSeconds * (Math.PI * 2 / 210 - EARTH_ANGULAR_VELOCITY);
             const renderStart = performance.now();
             renderer!.render(scene, camera);
-            if (shaderFailed || renderer!.getContext().isContextLost()) throw new Error('Earth frame unavailable');
+            if (shaderFailed || renderer!.getContext().isContextLost()) throw new Error(shaderFailed ? 'shader' : 'context');
             const decision = governor.sample(now, intervalMs, performance.now() - renderStart);
             if (decision === 'changed') applyQuality();
-            else if (decision === 'fallback') throw new Error('Sustained severe rendering constraint');
+            else if (decision === 'fallback') throw new Error('performance');
+            renderedFrames++;
+            if (now - diagnosticTime >= 1000) {
+              diagnosticTime = now;
+              element.dataset.earthFrames = String(renderedFrames);
+              element.dataset.earthAngle = globe.rotation.y.toFixed(6);
+            }
             // Never hide the fallback merely because textures loaded or a canvas was appended.
             if (!shown) { shown = true; callbacks.current.onReady(); }
           },
@@ -237,8 +249,8 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
           device.connection?.removeEventListener?.('change', size);
         };
         window.addEventListener('blur', resetPointer);
-      }).catch(fail);
-    } catch { fail(); }
+      }).catch(() => fail('texture'));
+    } catch { fail('initialization'); }
     return () => {
       disposed = true;
       loop?.dispose();
@@ -262,5 +274,5 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       }
     };
   }, []);
-  return <div ref={host} className="earth-canvas" />;
+  return <div ref={host} className="earth-canvas" aria-hidden="true" />;
 }

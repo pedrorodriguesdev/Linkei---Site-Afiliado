@@ -132,7 +132,7 @@ async function open(script, options = {}) {
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', error => errors.push(error.message));
   virtualConsole.on('error', (...args) => errors.push(args.map(String).join(' ')));
-  const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://earth.test', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: options.debug ? 'https://earth.test/?globeDebug=1' : 'https://earth.test', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const w = dom.window;
   Object.defineProperty(w.performance, 'now', { value: () => w.__perfTime });
   Object.defineProperty(w, 'devicePixelRatio', { value: 3, configurable: true });
@@ -371,6 +371,7 @@ for (const renderCost of [1,200]) {
   for(let index=1;index<=1500&&dom.frames.pending.size;index++)dom.frames.step(index*1000/60);
   await eventually(()=>!w.document.querySelector('canvas'),'Severe performance fallback releases mobile canvas');
   check(!w.document.querySelector('.earth-visual--ready'),'Severe performance fallback restores static image visibility');
+  await eventually(()=>w.__disposed.renderer===1,'Severe fallback resource cleanup');
   equal(w.__disposed.renderer,1,'Severe fallback disposes the renderer');
   equal(dom.frames.pending.size,0,'Severe fallback leaves no RAF loop');
  }
@@ -382,6 +383,36 @@ for (const renderCost of [1,200]) {
  let bytes=0;
  for(const name of ['day','night','clouds'])bytes+=(await stat(path.join(project,`public/earth/${name}-mobile.webp`))).size;
  check(bytes>0&&bytes<160000,'Mobile texture set stays within its compressed asset budget');
+}
+
+{
+ const dom=await open(integratedScript,{width:1440,reducedMotion:true,debug:true});const w=dom.window;
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'reduced-motion','OS motion preference is explicitly reported');
+ check(w.document.querySelector('.earth-motion-message').textContent.includes('reduzir movimento'),'Static motion preference is explained to visitors');
+ check(w.document.querySelector('.earth-diagnostics').textContent.includes('reduced-motion'),'Diagnostic panel exposes the actual fallback reason');
+ equal(w.__allocations,0,'Reduced motion does not allocate a renderer automatically');
+ w.document.querySelector('.earth-motion-button').click();await tick();dom.emit(true);
+ await eventually(()=>w.__allocations===1,'Explicit user play should allow animation');
+ await eventually(()=>dom.observers.length>=2,'Explicit play should initialize renderer observer');dom.emit(true);dom.frames.step(0);await tick();
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Explicit user choice starts the real renderer lifecycle');
+ const host=w.document.querySelector('.earth-canvas');equal(host.dataset.earthState,'running','Renderer reports its actual visibility state');
+ equal(host.dataset.earthFrames,'1','Diagnostic frame counter starts after a valid draw');
+ const before=Number(host.dataset.earthAngle);
+ for(let i=1;i<=61;i++)dom.frames.step(i*1000/60);
+ check(Number(host.dataset.earthAngle)>before,'Diagnostic angle advances with actual mesh draws');
+ w.document.querySelector('.earth-motion-button').click();await tick();
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'paused','Pause control records the explicit user choice');
+ equal(dom.frames.pending.size,0,'Pause control releases the animation loop');
+ check(!w.document.querySelector('canvas'),'Pause releases GPU resources');await dom.finish();
+}
+{
+ const dom=await open(integratedScript,{width:1440,shaderFailure:true,debug:true});const w=dom.window;
+ dom.emit(true);await eventually(()=>w.__allocations===1,'Failure diagnostic allocation');
+ await eventually(()=>dom.observers.length>=2,'Failure diagnostic observer');dom.emit(true);dom.frames.step(0);await tick();
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'shader','Shader failures retain a distinct observable reason');
+ check(w.document.querySelector('.earth-diagnostics').textContent.includes('Estado: shader'),'Diagnostic panel reports a real renderer failure rather than generic readiness');
+ check(w.document.querySelector('.earth-motion-button').textContent.includes('Ativar'),'A failed animation can be retried explicitly');
+ check(!w.document.querySelector('canvas'),'Failed shader canvas is removed');await dom.finish();
 }
 console.log(`PASS: ${assertions} Earth assertions. Actual React gate, production clock and renderer lifecycle tested with DOM/Three mocks.`);
 console.log('  ✓ Animated renderer on mobile, tablet and desktop; accessibility/API fallbacks retained');

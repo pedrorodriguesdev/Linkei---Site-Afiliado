@@ -88,3 +88,13 @@ O catálogo móvel preserva “Explore nossas ofertas digitais.” e “Encontre
 - `README.md`: documentação atualizada.
 
 As verificações usam DOM e renderer simulado. Não comprovam renderização real dos shaders, ausência de overflow visual, qualidade de imagem, suavidade em GPU real ou Core Web Vitals. Esses pontos precisam de inspeção em navegador real, indisponível neste ambiente.
+
+## Diagnóstico e controle da animação
+
+O globo possui um botão para iniciar, pausar ou tentar novamente. A preferência do sistema por movimento reduzido continua sendo o padrão; o botão permite uma escolha explícita do visitante, e uma mudança posterior de preferência do sistema volta ao comportamento automático.
+
+Quando a animação não inicia, a página informa o motivo em vez de manter silenciosamente uma imagem estática. Os motivos distinguem preferência de movimento, inicialização, carregamento de textura, shader, perda de contexto e limitação severa de desempenho.
+
+Adicione `?globeDebug=1` ao endereço para abrir um painel local de diagnóstico. Ele mostra a preferência de movimento, presença da API WebGL2, estado do renderer, tamanho do canvas, quadros efetivamente desenhados e ângulo do objeto 3D. Não há envio de telemetria. Esse painel apenas lê o estado a cada segundo; a rotação continua usando seu único requestAnimationFrame.
+
+Durante a investigação, os shaders exatos gerados pelo Three.js para superfície, nuvens e atmosfera foram compilados e linkados com sucesso em OpenGL ES 3.2/Mesa. Isso verifica a compilação real nesse ambiente, sem comprovar o comportamento do navegador ou da GPU de um visitante.
