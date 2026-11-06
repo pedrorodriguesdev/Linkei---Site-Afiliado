@@ -41,15 +41,15 @@ Slugs: `seja-seu-chefe`, `metodo-tiktok-shop`, `ia-academy`, `primeira-venda-24h
 
 ## Globo e desempenho
 
-A Terra é animada em desktop, tablet e celular quando WebGL2 está disponível e a preferência de movimento permite. Three.js continua em um bundle separado, importado quando o globo se aproxima da área visível. A verificação da API não cria um contexto descartável; a criação do renderer confirma o suporte real. O shader combina texturas geográficas diurnas/noturnas, nuvens e atmosfera, com espaços de cor corretos e saída sRGB. As luzes urbanas reais são atenuadas no lado diurno.
+A Terra inicia e gira automaticamente em desktop, tablet e celular, sem botão e sem clique prévio, conforme o pedido atual do proprietário. Three.js continua em um bundle separado, importado quando o globo se aproxima da área visível. A inicialização tenta o renderer real, evitando bloqueios indevidos por uma checagem de construtor; a criação do contexto confirma o suporte. O shader combina texturas geográficas diurnas/noturnas, nuvens e atmosfera, com espaços de cor corretos e saída sRGB. As luzes urbanas reais são atenuadas no lado diurno.
 
 A rotação completa uma volta em aproximadamente 180 segundos e as nuvens em 210 segundos. Um único requestAnimationFrame atualiza diretamente os objetos 3D, sem renderização React a cada quadro. Desenhos em frequência menor preservam a velocidade angular. O relógio é reiniciado depois de pausas para evitar saltos; a animação pausa fora da tela ou com a aba oculta.
 
 O perfil móvel usa texturas WebP derivadas dos mesmos mapas reais, com 768×384 pixels (aproximadamente 112 KB somadas), geometria menor e DPR limitado inicialmente a 1,15. Não há pointer tracking no perfil móvel. Desktop usa as texturas detalhadas preservadas e DPR até 1,5. As informações de memória, processamento e conexão só escolhem o perfil inicial, sem desativar a rotação por largura.
 
-O controlador adaptativo observa os intervalos entre desenhos e o tempo da chamada de renderização em janelas de pelo menos dois segundos. Dois períodos ruins reduzem a qualidade; cinco períodos saudáveis permitem recuperação, respeitando intervalos mínimos de 8 segundos para reduzir e 15 segundos para recuperar. Os níveis reduzem resolução, limitam desenhos a 60/30/24 por segundo e retiram a camada opcional de nuvens no nível mínimo. Isso não representa FPS medido em aparelhos reais. Não há recriação do renderer nessas trocas nem durante resize. Texturas escolhidas no início da cena são reutilizadas em resize, evitando downloads duplicados.
+O controlador adaptativo observa os intervalos entre desenhos e o tempo da chamada de renderização em janelas de pelo menos dois segundos. Dois períodos ruins reduzem a qualidade; cinco períodos saudáveis permitem recuperação, respeitando intervalos mínimos de 8 segundos para reduzir e 15 segundos para recuperar. Os níveis reduzem resolução e limitam desenhos a 60/30/24 por segundo. No nível mínimo, as nuvens são incorporadas ao shader da superfície, reduzindo overdraw sem remover sua aparência. Isso não representa FPS medido em aparelhos reais. Não há recriação do renderer nessas trocas nem durante resize. Texturas escolhidas no início da cena são reutilizadas em resize, evitando downloads duplicados.
 
-A projeção estática permanece durante o carregamento e só desaparece após um quadro válido. Movimento reduzido, API incompatível, falhas de shader/contexto/textura ou limitação severa persistente de renderização usam esse fallback. Tamanho de tela, toque e economia de dados, isoladamente, não desativam a rotação. Todos os recursos são liberados ao desmontar. As fontes estão em `public/earth/SOURCES.txt`; a licença da fonte tipográfica está em `public/fonts/OFL.txt`.
+A projeção estática permanece durante o carregamento e só desaparece após um quadro válido. API incompatível, falhas de shader/contexto/textura ou limitação severa persistente de renderização usam esse fallback. A preferência de movimento reduzido continua valendo para os reveals e demais efeitos do site; a Terra segue a exigência específica mais recente de rotação automática e contínua. Tamanho de tela, toque e economia de dados, isoladamente, não desativam a rotação. Todos os recursos são liberados ao desmontar. As fontes estão em `public/earth/SOURCES.txt`; a licença da fonte tipográfica está em `public/fonts/OFL.txt`.
 
 ## Conteúdo e privacidade
 
@@ -89,12 +89,14 @@ O catálogo móvel preserva “Explore nossas ofertas digitais.” e “Encontre
 
 As verificações usam DOM e renderer simulado. Não comprovam renderização real dos shaders, ausência de overflow visual, qualidade de imagem, suavidade em GPU real ou Core Web Vitals. Esses pontos precisam de inspeção em navegador real, indisponível neste ambiente.
 
-## Diagnóstico e controle da animação
+## Rotação automática e realismo
 
-O globo possui um botão para iniciar, pausar ou tentar novamente. A preferência do sistema por movimento reduzido continua sendo o padrão; o botão permite uma escolha explícita do visitante, e uma mudança posterior de preferência do sistema volta ao comportamento automático.
+O globo inicia automaticamente em cada visita, sem estados de play/pause e sem controles visíveis. A rotação continua enquanto o globo está visível; ocultar a aba ou sair da área visível pausa o trabalho gráfico, que retoma sozinho ao retornar. Há um único requestAnimationFrame e nenhuma atualização React por quadro.
 
-Quando a animação não inicia, a página informa o motivo em vez de manter silenciosamente uma imagem estática. Os motivos distinguem preferência de movimento, inicialização, carregamento de textura, shader, perda de contexto e limitação severa de desempenho.
+O mapa dedicado `city-lights.webp`/`city-lights-mobile.webp` vem de Solar System Scope, sob CC BY 4.0. Ele é tratado como dado de emissão, com os pontos urbanos separados do fundo e visibilidade controlada pelo lado noturno. O albedo diurno continua em sRGB. Créditos e licença estão no rodapé e em `public/earth/SOURCES.txt` e `CITY-LIGHTS-LICENSE.txt`.
 
-Adicione `?globeDebug=1` ao endereço para abrir um painel local de diagnóstico. Ele mostra a preferência de movimento, presença da API WebGL2, estado do renderer, tamanho do canvas, quadros efetivamente desenhados e ângulo do objeto 3D. Não há envio de telemetria. Esse painel apenas lê o estado a cada segundo; a rotação continua usando seu único requestAnimationFrame.
+A camada de nuvens usa um mapa independente, transparência mais definida e rotação relativa de 210 segundos. A atmosfera conserva o halo fino. O perfil econômico incorpora as nuvens à superfície em vez de removê-las.
 
-Durante a investigação, os shaders exatos gerados pelo Three.js para superfície, nuvens e atmosfera foram compilados e linkados com sucesso em OpenGL ES 3.2/Mesa. Isso verifica a compilação real nesse ambiente, sem comprovar o comportamento do navegador ou da GPU de um visitante.
+Adicione `?globeDebug=1` ao endereço para abrir o painel local de diagnóstico. Ele mostra o estado do renderer, tamanho do canvas, quadros efetivamente desenhados e ângulo do objeto. Não há envio de telemetria. O timer de diagnóstico apenas lê valores; não participa da rotação.
+
+Os testes de integração verificam início sem interação, ausência de controles, rotação por duas voltas completas e limpeza dos recursos. Os shaders exatos gerados pelo Three.js foram compilados e renderizados em OpenGL ES 3.2/Mesa, usando as texturas reais, para verificar as nuvens, a emissão noturna e a mudança dos pixels com a rotação. Isso não substitui inspeção no navegador e na GPU de cada visitante.

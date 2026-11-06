@@ -18,6 +18,9 @@ const vertexShader = `
 const surfaceShader = `
   uniform sampler2D dayMap;
   uniform sampler2D nightMap;
+  uniform sampler2D cloudMap;
+  uniform float integratedClouds;
+  uniform float cloudShift;
   uniform vec3 sunDirection;
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -30,9 +33,18 @@ const surfaceShader = `
     vec3 day = texture2D(dayMap, vUv).rgb;
     vec3 night = texture2D(nightMap, vUv).rgb;
     float illumination = 0.35 + 0.65 * pow(max(sun, 0.0), 0.65);
-    float cityLights = smoothstep(0.015, 0.48, dot(night, vec3(0.26, 0.64, 0.10)));
-    vec3 darkness = day * vec3(0.055, 0.09, 0.18) + vec3(1.5, 0.86, 0.24) * cityLights;
+    // The atlas contains blue terrain as well as lights. Only warm excess contributes emission.
+    float warmLights = max(night.r - night.b * 0.82 - 0.008, 0.0);
+    float cityLights = pow(clamp(warmLights * 7.0, 0.0, 1.0), 0.62);
+    float nightSide = 1.0 - smoothstep(-0.12, 0.23, sun);
+    vec3 darkness = day * vec3(0.045, 0.075, 0.14);
     vec3 color = mix(darkness, day * illumination, daylight);
+    color += vec3(2.2, 1.15, 0.27) * cityLights * nightSide;
+    if (integratedClouds > 0.5) {
+      float density = smoothstep(0.025, 0.88, texture2D(cloudMap, vec2(fract(vUv.x + cloudShift), vUv.y)).r);
+      vec3 cloudColor = vec3(0.86, 0.92, 1.0) * (0.055 + 0.95 * max(sun, 0.0));
+      color = mix(color, cloudColor, density * 0.76);
+    }
     float ocean = smoothstep(0.0, 0.12, day.b - day.r);
     float specular = pow(max(dot(reflect(-sunDirection, normal), view), 0.0), 28.0);
     color += vec3(0.18, 0.31, 0.45) * specular * ocean * daylight * 0.3;
@@ -50,8 +62,9 @@ const cloudsShader = `
   void main() {
     float sun = dot(normalize(vNormal), sunDirection);
     float amount = smoothstep(-0.12, 0.38, sun);
-    float cloud = texture2D(cloudMap, vUv).r;
-    gl_FragColor = vec4(vec3(0.79, 0.87, 1.0) * (0.3 + 0.7 * max(sun, 0.0)), cloud * (0.22 + 0.30 * amount));
+    float cloud = smoothstep(0.025, 0.88, texture2D(cloudMap, vUv).r);
+    vec3 cloudColor = vec3(0.86, 0.92, 1.0) * (0.055 + 0.95 * max(sun, 0.0));
+    gl_FragColor = vec4(cloudColor, cloud * (0.46 + 0.36 * amount));
     #include <colorspace_fragment>
   }
 `;
@@ -63,7 +76,7 @@ const atmosphereShader = `
     vec3 view = normalize(cameraPosition - vPosition);
     float rim = pow(1.0 - abs(dot(normalize(vNormal), view)), 4.0);
     float light = 0.28 + 0.72 * max(dot(normalize(vNormal), sunDirection), 0.0);
-    gl_FragColor = vec4(vec3(0.10, 0.37, 1.0), rim * light * 0.65);
+    gl_FragColor = vec4(vec3(0.10, 0.37, 1.0), rim * light * 0.82);
     #include <colorspace_fragment>
   }
 `;
@@ -152,7 +165,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       const texture = (url: string) => new Promise<THREE.Texture>((resolve, reject) => loader.load(url, t => {
         if (disposed || failed) { t.dispose(); reject(new Error('Earth no longer active')); return; }
         t.anisotropy = Math.min(renderer!.capabilities.getMaxAnisotropy(), profile.mobile ? 2 : 4);
-        t.colorSpace = url.includes('clouds') ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+        t.colorSpace = url.includes('day') ? THREE.SRGBColorSpace : THREE.NoColorSpace;
         t.generateMipmaps = true;
         t.minFilter = THREE.LinearMipmapLinearFilter;
         t.magFilter = THREE.LinearFilter;
@@ -160,10 +173,10 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
         resolve(t);
       }, undefined, reject));
       const suffix = profile.lowTextures ? '-mobile' : '';
-      Promise.all([texture(`/earth/day${suffix}.webp`), texture(`/earth/night${suffix}.webp`), texture(`/earth/clouds${suffix}.webp`)]).then(([day, night, clouds]) => {
+      Promise.all([texture(`/earth/day${suffix}.webp`), texture(`/earth/city-lights${suffix}.webp`), texture(`/earth/clouds${suffix}.webp`)]).then(([day, night, clouds]) => {
         if (disposed || failed) return;
         const geometry = new THREE.SphereGeometry(1, ...profile.segments); geometries.push(geometry);
-        const surface = new THREE.ShaderMaterial({ vertexShader, fragmentShader: surfaceShader, uniforms: { dayMap: { value: day }, nightMap: { value: night }, sunDirection: { value: sun } } });
+        const surface = new THREE.ShaderMaterial({ vertexShader, fragmentShader: surfaceShader, uniforms: { dayMap: { value: day }, nightMap: { value: night }, cloudMap: { value: clouds }, integratedClouds: { value: 0 }, cloudShift: { value: 0 }, sunDirection: { value: sun } } });
         const cloudMaterial = new THREE.ShaderMaterial({ vertexShader, fragmentShader: cloudsShader, transparent: true, depthWrite: false, uniforms: { cloudMap: { value: clouds }, sunDirection: { value: sun } } });
         const atmosphere = new THREE.ShaderMaterial({ vertexShader, fragmentShader: atmosphereShader, side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { sunDirection: { value: sun } } });
         materials.push(surface, cloudMaterial, atmosphere);
@@ -174,6 +187,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
           renderer!.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatios[quality()]));
           if (hasSize) renderer!.setSize(element.clientWidth, element.clientHeight, false);
           cloudMesh.visible = quality() < 2;
+          surface.uniforms.integratedClouds.value = quality() === 2 ? 1 : 0;
           element.dataset.earthProfile = profile.mobile ? 'mobile' : 'desktop';
           element.dataset.earthQuality = String(quality());
         };
@@ -188,6 +202,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
             group.rotation.x += (baseTilt + pointerTilt - group.rotation.x) * damping;
             group.rotation.z += (pointerLean - group.rotation.z) * damping;
             cloudMesh.rotation.y += deltaSeconds * (Math.PI * 2 / 210 - EARTH_ANGULAR_VELOCITY);
+            surface.uniforms.cloudShift.value = -cloudMesh.rotation.y / (Math.PI * 2);
             const renderStart = performance.now();
             renderer!.render(scene, camera);
             if (shaderFailed || renderer!.getContext().isContextLost()) throw new Error(shaderFailed ? 'shader' : 'context');

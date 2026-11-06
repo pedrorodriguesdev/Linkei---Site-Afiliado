@@ -79,9 +79,9 @@ const threeStub = `
   export class Vector3 {constructor(){} normalize(){return this} }
   export class PerspectiveCamera {position={z:0};updateProjectionMatrix(){} }
   export class SphereGeometry {constructor(...args){globalThis.__segments=args}dispose(){globalThis.__disposed.geometry++} }
-  export class ShaderMaterial {constructor(options){this.options=options}dispose(){globalThis.__disposed.material++} }
+  export class ShaderMaterial {constructor(options){this.options=options;this.uniforms=options.uniforms}dispose(){globalThis.__disposed.material++} }
   export class Mesh {rotation={x:0,y:0,z:0};scale={setScalar(value){this.value=value}};constructor(geometry,material){this.geometry=geometry;this.material=material} }
-  export class TextureLoader {load(url,success,progress,error){globalThis.__textureURLs.push(url);queueMicrotask(()=>{if(globalThis.__textureFailure && url.includes('night'))error(new Error('Texture failed'));else success({anisotropy:0,dispose(){globalThis.__disposed.texture++}})})} }
+  export class TextureLoader {load(url,success,progress,error){globalThis.__textureURLs.push(url);queueMicrotask(()=>{if(globalThis.__textureFailure && url.includes('city-lights'))error(new Error('Texture failed'));else success({anisotropy:0,dispose(){globalThis.__disposed.texture++}})})} }
   export class WebGLRenderer {
     domElement=document.createElement('canvas');debug={};capabilities={getMaxAnisotropy(){return 4}};
     constructor(){globalThis.__allocations++;if(globalThis.__constructionFailure)throw new Error('WebGL2 refused')}
@@ -189,7 +189,6 @@ async function open(script, options = {}) {
 }
 
 for (const [label, options] of [
-  ['reduced motion', { reducedMotion: true }], ['missing WebGL2 API', { noWebGL2: true }],
   ['missing observer API', { noObserver: true }],
 ]) {
   const dom = await open(gateScript, options);
@@ -201,6 +200,7 @@ for (const [label, options] of [
 }
 for (const [label, options] of [
   ...[320,360,390,430,768,1024,1440].map(width => [`${width}px viewport`, {width, finePointer: width >= 1024}]),
+  ['system prefers reduced motion', {reducedMotion:true}], ['constructor probe missing but real renderer works', {noWebGL2:true}],
   ['coarse input on wide screen', {finePointer:false}], ['two-core 2GB phone', {width:390,memory:2,cores:2}],
   ['data saver', {width:390,connection:{saveData:true}}], ['3g mobile', {width:390,connection:{effectiveType:'3g'}}],
   ['slow downlink', {connection:{downlink:0.8}}], ['high latency', {connection:{rtt:800}}],
@@ -222,17 +222,12 @@ for (const [label, options] of [
   equal(w.__unmounts, 0, 'Viewport size alone does not unmount animation');
   dom.connection.change({saveData:true}); await tick();
   equal(w.__mounts, 1, 'Data saver changes quality without disabling rotation');
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
-  await eventually(() => w.__unmounts === 1, 'Reduced motion must stop renderer');
-  check(!w.document.querySelector('.earth-visual--ready'), 'Reduced motion restores static fallback');
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
-  await eventually(() => w.__mounts === 2, 'Animation did not resume after motion preference changed');
-  equal(w.__imports, 1, 'Motion recovery reuses the lazy module');
-  w.__controls.onFailure(); await eventually(() => w.__unmounts === 2, 'Failure must release renderer');
-  dom.emit(true); await tick(); equal(w.__mounts, 2, 'Failure does not start a retry loop');
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
-  await eventually(() => w.__mounts === 3, 'Explicit preference recovery can retry');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(true); await tick();
+  equal(w.__mounts,1,'Owner-requested automatic Earth keeps running after OS preference changes');
+  equal(w.__unmounts,0,'Earth has no preference-triggered click-to-start state');
+  equal(w.document.querySelectorAll('.earth-visual button').length,0,'No start/pause controls remain');
+  w.__controls.onFailure(); await eventually(() => w.__unmounts === 1, 'Actual rendering failure releases renderer');
+  dom.emit(true); await tick(); equal(w.__mounts,1,'A graphics failure does not start an uncontrolled retry loop');
   await dom.finish();
   check([...dom.media.values()].every(query => query.listeners.size === 0), 'Media-query listeners cleaned up');
   equal(dom.connectionListeners.size, 0, 'No network listener leaked');
@@ -240,11 +235,9 @@ for (const [label, options] of [
 }
 {
   const dom = await open(gateScript); const w = dom.window;
-  dom.emit(true); w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
-  await tick(); await tick();
-  equal(w.__mounts, 0, 'Import resolving after reduced-motion change cannot mount WebGL');
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
-  await eventually(() => w.__mounts === 1, 'Cached import failed to recover');
+  dom.emit(true); dom.emit(false); await tick(); await tick();
+  equal(w.__mounts,0,'Lazy import resolving after Earth leaves viewport does not allocate an invisible renderer');
+  dom.emit(true); await eventually(()=>w.__mounts===1,'Cached import starts automatically when Earth becomes visible');
   await dom.finish();
 }
 
@@ -353,7 +346,8 @@ for(const [width,options] of [[390,{finePointer:false}],[768,{finePointer:false}
  equal(w.__allocations,1,'Adaptive quality uses the same renderer');
  equal(w.document.querySelector('.earth-canvas').dataset.earthQuality,'2','Measured slow rendering lowers actual renderer quality');
  check(w.__pixelRatio<1,'Adaptive mode reduces the internal rendering resolution');
- equal(w.__globe.children[1].visible,false,'Lowest tier removes optional cloud overdraw');
+ equal(w.__globe.children[1].visible,false,'Lowest tier removes separate cloud overdraw');
+ equal(w.__globe.children[0].material.uniforms.integratedClouds.value,1,'Lowest tier retains clouds inside the surface shader');
  equal(w.__failures,0,'Moderate slow rendering retains animation');await dom.finish();
 }
 
@@ -381,29 +375,31 @@ for (const renderCost of [1,200]) {
  const css=await readFile(path.join(project,'src/components/earth.css'),'utf8');
  check(!/\.earth-canvas\s*\{[^}]*display\s*:\s*none/.test(css),'Shipped Earth CSS never hides the canvas by viewport width');
  let bytes=0;
- for(const name of ['day','night','clouds'])bytes+=(await stat(path.join(project,`public/earth/${name}-mobile.webp`))).size;
+ for(const name of ['day','city-lights','clouds'])bytes+=(await stat(path.join(project,`public/earth/${name}-mobile.webp`))).size;
  check(bytes>0&&bytes<160000,'Mobile texture set stays within its compressed asset budget');
 }
 
 {
  const dom=await open(integratedScript,{width:1440,reducedMotion:true,debug:true});const w=dom.window;
- equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'reduced-motion','OS motion preference is explicitly reported');
- check(w.document.querySelector('.earth-motion-message').textContent.includes('reduzir movimento'),'Static motion preference is explained to visitors');
- check(w.document.querySelector('.earth-diagnostics').textContent.includes('reduced-motion'),'Diagnostic panel exposes the actual fallback reason');
- equal(w.__allocations,0,'Reduced motion does not allocate a renderer automatically');
- w.document.querySelector('.earth-motion-button').click();await tick();dom.emit(true);
- await eventually(()=>w.__allocations===1,'Explicit user play should allow animation');
- await eventually(()=>dom.observers.length>=2,'Explicit play should initialize renderer observer');dom.emit(true);dom.frames.step(0);await tick();
- equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Explicit user choice starts the real renderer lifecycle');
- const host=w.document.querySelector('.earth-canvas');equal(host.dataset.earthState,'running','Renderer reports its actual visibility state');
- equal(host.dataset.earthFrames,'1','Diagnostic frame counter starts after a valid draw');
- const before=Number(host.dataset.earthAngle);
- for(let i=1;i<=61;i++)dom.frames.step(i*1000/60);
- check(Number(host.dataset.earthAngle)>before,'Diagnostic angle advances with actual mesh draws');
- w.document.querySelector('.earth-motion-button').click();await tick();
- equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'paused','Pause control records the explicit user choice');
- equal(dom.frames.pending.size,0,'Pause control releases the animation loop');
- check(!w.document.querySelector('canvas'),'Pause releases GPU resources');await dom.finish();
+ dom.emit(true);await eventually(()=>w.__allocations===1,'Earth starts automatically without clicking');
+ await eventually(()=>dom.observers.length>=2,'Automatic renderer observer');dom.emit(true);dom.frames.step(0);await tick();
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Automatic startup reaches a valid running frame');
+ equal(w.document.querySelectorAll('.earth-visual button').length,0,'Visitors never need a start or pause button');
+ const host=w.document.querySelector('.earth-canvas');equal(host.dataset.earthState,'running','Renderer reports actual running state');
+ equal(host.dataset.earthFrames,'1','Diagnostic counter starts on valid GPU draw');
+ const before=w.__globe.rotation.y;
+ for(let index=1;index<=21600;index++)dom.frames.step(index*1000/60);
+ closeTo(w.__globe.rotation.y-before,Math.PI*4,'Automatic rotation continues for two complete turns without any user event');
+ equal(dom.frames.pending.size,1,'Continuous rotation retains one RAF');
+ equal(w.__allocations,1,'Continuous rotation retains the original renderer');
+ equal(w.__failures,0,'Healthy automatic rotation never enters a stopped state');
+ const uniforms=w.__globe.children[0].material.uniforms;
+ equal(uniforms.nightMap.value.colorSpace,'','Emission data is not accidentally darkened by color decoding');
+ equal(uniforms.dayMap.value.colorSpace,'srgb','Daylight albedo keeps correct sRGB decoding');
+ check(w.__textureURLs.some(url=>url.includes('city-lights.webp')),'Renderer requests the dedicated geographic light map');
+ check(w.__globe.children[1].visible,'Cloud layer remains present at normal quality');
+ equal(w.__globe.children[1].scale.value,1.008,'Clouds float above the Earth surface');
+ await dom.finish();equal(dom.frames.pending.size,0,'Page disposal still releases automatic RAF');
 }
 {
  const dom=await open(integratedScript,{width:1440,shaderFailure:true,debug:true});const w=dom.window;
@@ -411,11 +407,11 @@ for (const renderCost of [1,200]) {
  await eventually(()=>dom.observers.length>=2,'Failure diagnostic observer');dom.emit(true);dom.frames.step(0);await tick();
  equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'shader','Shader failures retain a distinct observable reason');
  check(w.document.querySelector('.earth-diagnostics').textContent.includes('Estado: shader'),'Diagnostic panel reports a real renderer failure rather than generic readiness');
- check(w.document.querySelector('.earth-motion-button').textContent.includes('Ativar'),'A failed animation can be retried explicitly');
+ equal(w.document.querySelectorAll('.earth-visual button').length,0,'Even diagnostic failures do not add visitor controls');
  check(!w.document.querySelector('canvas'),'Failed shader canvas is removed');await dom.finish();
 }
 console.log(`PASS: ${assertions} Earth assertions. Actual React gate, production clock and renderer lifecycle tested with DOM/Three mocks.`);
-console.log('  ✓ Animated renderer on mobile, tablet and desktop; accessibility/API fallbacks retained');
+console.log('  ✓ Automatic renderer on mobile, tablet and desktop; no click-to-play gate or visible controls');
 console.log('  ✓ Same rotation speed at different draw targets, one RAF, pause/resume, mobile textures and no mobile pointer tracking');
 console.log('  ✓ Measured quality adaptation with hysteresis, renderer reuse, error recovery and resource disposal');
 console.log('LIMIT: No browser/GPU renderer available; real WebGL shader compilation, visual smoothness and frame rate are not measured.');

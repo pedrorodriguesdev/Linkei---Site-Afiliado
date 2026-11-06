@@ -1,0 +1,9 @@
+Earth Night Map — Solar System Scope
+Source: https://www.solarsystemscope.com/textures/download/2k_earth_nightmap.jpg
+Texture library: https://www.solarsystemscope.com/textures/
+License: Creative Commons Attribution 4.0 International
+License URL: https://creativecommons.org/licenses/by/4.0/
+
+Changes: converted to WebP; mobile variant resized to 768x384 pixels.
+Used as a geographically grounded emission mask in the Elevon Earth shader.
+Attribution and license links appear in the site footer.

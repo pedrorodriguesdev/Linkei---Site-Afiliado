@@ -15,3 +15,12 @@ Desktop WebGL sphere: day.webp, night.webp and clouds.webp.
 
 V3 mobile texture variants: day-mobile.webp, night-mobile.webp and clouds-mobile.webp.
 Derived locally from the preserved textures above, resized to 768x384 with Lanczos filtering and compressed as WebP. No product imagery was generated.
+
+Dedicated city-light emission atlas:
+Solar System Scope — Earth Night Map (2K)
+https://www.solarsystemscope.com/textures/download/2k_earth_nightmap.jpg
+https://www.solarsystemscope.com/textures/
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+Derived assets: city-lights.webp and city-lights-mobile.webp (WebP conversion and resize).
+Credit and license links are provided in the site footer.

@@ -8,10 +8,6 @@ export type EarthCapabilities = {
   wide: boolean; finePointer: boolean; reducedMotion: boolean; webgl2: boolean;
   observers: boolean; memory?: number; cores?: number; connection?: EarthConnection;
 };
-export function canAnimateEarth({ reducedMotion, webgl2, observers }: Pick<EarthCapabilities, 'reducedMotion' | 'webgl2' | 'observers'>): boolean {
-  // Screen size and input type select quality; neither disables rotation.
-  return !reducedMotion && webgl2 && observers;
-}
 export type EarthRenderProfile = {
   mobile: boolean; lowTextures: boolean; pointer: boolean; segments: [number, number];
   initialTier: number; pixelRatios: readonly number[];

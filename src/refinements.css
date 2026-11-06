@@ -209,3 +209,7 @@
 @media(prefers-reduced-motion:reduce){.catalog-heading-row:after,.faq-list details[open]>p{animation:none}}
 .catalog-experience{overflow-x:clip}
 .filter-button:focus-visible{outline-offset:-3px}
+.earth-credits{font-size:8px;line-height:1.7;color:var(--muted)}
+.earth-credits>a{display:inline;color:var(--body)}
+.earth-credits>a:hover{text-decoration:underline}
+@media(max-width:700px){.earth-credits{order:4;flex-basis:100%;font-size:8px}}
