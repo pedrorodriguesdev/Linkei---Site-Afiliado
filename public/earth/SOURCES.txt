@@ -1,0 +1,14 @@
+Earth visual assets
+
+Geographic day and night texture source: NASA imagery distributed in the three-globe example assets:
+https://github.com/vasturiano/three-globe/tree/master/example/img
+Original files: earth-blue-marble.jpg and earth-night.jpg.
+
+Cloud layer source:
+https://github.com/turban/webgl-earth/blob/master/images/fair_clouds_4k.png
+
+The static transparent Earth images were generated from an orthographic spherical projection of the same geographic textures, with directional sunlight, real night-light data, cloud opacity and atmospheric shading. They are not product artwork.
+
+Mobile: earth-mobile.webp (static only).
+Desktop fallback: earth-static.webp.
+Desktop WebGL sphere: day.webp, night.webp and clouds.webp.
