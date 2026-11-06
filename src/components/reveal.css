@@ -7,5 +7,5 @@
 [data-reveal-state=entering]{animation:elevon-reveal var(--reveal-duration,550ms) cubic-bezier(.22,1,.36,1) var(--reveal-delay,0ms) both}
 [data-reveal-state=pending]:focus-within{opacity:1;transform:none}
 @keyframes elevon-reveal{from{opacity:0;transform:translate3d(var(--reveal-x),var(--reveal-y),0) scale(var(--reveal-scale))}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
-@media(max-width:700px){[data-reveal]{--reveal-y:14px}[data-reveal-variant=fade-in],[data-reveal-variant=slide-left],[data-reveal-variant=slide-right]{--reveal-y:0px}[data-reveal-variant=slide-left]{--reveal-x:12px}[data-reveal-variant=slide-right]{--reveal-x:-12px}[data-reveal-state=entering]{animation-duration:450ms;animation-delay:var(--reveal-delay-mobile,0ms)}}
+@media(max-width:700px){[data-reveal]{--reveal-y:14px}[data-reveal-variant=fade-in],[data-reveal-variant=slide-left],[data-reveal-variant=slide-right]{--reveal-y:0px}[data-reveal-variant=slide-left]{--reveal-x:12px}[data-reveal-variant=slide-right]{--reveal-x:-12px}[data-reveal-state=entering]{animation-duration:500ms;animation-delay:var(--reveal-delay-mobile,0ms)}}
 @media(prefers-reduced-motion:reduce){[data-reveal][data-reveal-state]{opacity:1!important;transform:none!important;animation:none!important}}

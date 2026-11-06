@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFile, stat } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
@@ -17,7 +18,7 @@ async function eventually(predicate, message) {
 
 // Import the production controller; these tests exercise the same clock used by DesktopEarth.
 const runtimeBuild = await build({ entryPoints: [path.join(project, 'src/components/earthRuntime.ts')], bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent' });
-const { createEarthRotationLoop, EARTH_ANGULAR_VELOCITY } = await import(`data:text/javascript;base64,${Buffer.from(runtimeBuild.outputFiles[0].text).toString('base64')}`);
+const { createEarthRotationLoop, EARTH_ANGULAR_VELOCITY, getEarthRenderProfile, createEarthQualityGovernor } = await import(`data:text/javascript;base64,${Buffer.from(runtimeBuild.outputFiles[0].text).toString('base64')}`);
 function scheduler() {
   let id = 0;
   const pending = new Map();
@@ -49,10 +50,10 @@ function scheduler() {
   loop.setActive(true); frames.step(600000);
   closeTo(state.angle, beforePause, 'Resume after seven hidden minutes does not jump');
   equal(state.deltaSeconds, 0, 'First resumed delta is reset');
-  frames.step(600016);
-  closeTo(state.angle - beforePause, EARTH_ANGULAR_VELOCITY * 0.016, 'Rotation resumes using elapsed frame time');
+  frames.step(600017);
+  closeTo(state.angle - beforePause, EARTH_ANGULAR_VELOCITY * 0.017, 'Rotation resumes using elapsed frame time');
   frames.step(620016);
-  equal(state.deltaSeconds, 0.1, 'Long active-frame stalls are capped to 100ms');
+  equal(state.deltaSeconds, 0.25, 'Long active-frame stalls are capped to 250ms');
   loop.dispose(); loop.setActive(true);
   equal(frames.pending.size, 0, 'Disposal cancels RAF and prevents reactivation');
   equal(errors.length, 0, 'Normal lifecycle has no animation error');
@@ -77,19 +78,19 @@ const threeStub = `
   export class Scene extends Group {}
   export class Vector3 {constructor(){} normalize(){return this} }
   export class PerspectiveCamera {position={z:0};updateProjectionMatrix(){} }
-  export class SphereGeometry {dispose(){globalThis.__disposed.geometry++} }
+  export class SphereGeometry {constructor(...args){globalThis.__segments=args}dispose(){globalThis.__disposed.geometry++} }
   export class ShaderMaterial {constructor(options){this.options=options}dispose(){globalThis.__disposed.material++} }
-  export class Mesh {rotation={x:0,y:0,z:0};scale={setScalar(){}};constructor(geometry,material){this.geometry=geometry;this.material=material} }
-  export class TextureLoader {load(url,success,progress,error){queueMicrotask(()=>{if(globalThis.__textureFailure && url.includes('night'))error(new Error('Texture failed'));else success({anisotropy:0,dispose(){globalThis.__disposed.texture++}})})} }
+  export class Mesh {rotation={x:0,y:0,z:0};scale={setScalar(value){this.value=value}};constructor(geometry,material){this.geometry=geometry;this.material=material} }
+  export class TextureLoader {load(url,success,progress,error){globalThis.__textureURLs.push(url);queueMicrotask(()=>{if(globalThis.__textureFailure && url.includes('night'))error(new Error('Texture failed'));else success({anisotropy:0,dispose(){globalThis.__disposed.texture++}})})} }
   export class WebGLRenderer {
     domElement=document.createElement('canvas');debug={};capabilities={getMaxAnisotropy(){return 4}};
     constructor(){globalThis.__allocations++;if(globalThis.__constructionFailure)throw new Error('WebGL2 refused')}
-    setPixelRatio(value){globalThis.__pixelRatio=value}setClearColor(){}setSize(){}
-    render(scene){globalThis.__renderCount++;globalThis.__globe=scene.children[0].children[0];globalThis.__tilt=scene.children[0];if(globalThis.__shaderFailure)this.debug.onShaderError?.()}
+    setPixelRatio(value){globalThis.__pixelRatio=value}setClearColor(){}setSize(width,height){globalThis.__renderSize=[width,height]}
+    render(scene){globalThis.__perfTime+=globalThis.__renderCost;globalThis.__renderCount++;globalThis.__globe=scene.children[0].children[0];globalThis.__tilt=scene.children[0];if(globalThis.__shaderFailure)this.debug.onShaderError?.()}
     getContext(){return {isContextLost(){return Boolean(globalThis.__contextLost)}}}
     dispose(){globalThis.__disposed.renderer++}forceContextLoss(){globalThis.__disposed.context++}
   }
-  export const BackSide=1;export const AdditiveBlending=2;
+  export const BackSide=1;export const AdditiveBlending=2;export const SRGBColorSpace='srgb';export const NoColorSpace='';export const LinearMipmapLinearFilter=3;export const LinearFilter=4;
 `;
 async function bundle(entry, mock) {
   const built = await build({
@@ -119,6 +120,13 @@ const rendererScript = await bundle(`
   globalThis.__root=createRoot(document.getElementById('root'));globalThis.__root.render(<Harness/>);
 `, 'three');
 
+const integratedScript = await bundle(`
+ import React,{useEffect} from 'react';import {createRoot} from 'react-dom/client';
+ import EarthVisual from './src/components/EarthVisual';
+ function Harness(){useEffect(()=>{globalThis.__mounted=true},[]);return <EarthVisual/>}
+ globalThis.__root=createRoot(document.getElementById('root'));globalThis.__root.render(<Harness/>);
+`, 'three');
+
 async function open(script, options = {}) {
   const errors = [];
   const virtualConsole = new VirtualConsole();
@@ -126,8 +134,10 @@ async function open(script, options = {}) {
   virtualConsole.on('error', (...args) => errors.push(args.map(String).join(' ')));
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://earth.test', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const w = dom.window;
+  Object.defineProperty(w.performance, 'now', { value: () => w.__perfTime });
+  Object.defineProperty(w, 'devicePixelRatio', { value: 3, configurable: true });
   Object.assign(w, { __imports: 0, __mounts: 0, __unmounts: 0, __ready: 0, __failures: 0, __allocations: 0, __renderCount: 0,
-    __disposed: { texture: 0, material: 0, geometry: 0, renderer: 0, context: 0 }, __shaderFailure: options.shaderFailure,
+    __textureURLs: [], __perfTime: 0, __renderCost: options.renderCost ?? 1, __disposed: { texture: 0, material: 0, geometry: 0, renderer: 0, context: 0 }, __shaderFailure: options.shaderFailure,
     __constructionFailure: options.constructionFailure, __textureFailure: options.textureFailure });
   Object.defineProperty(w.navigator, 'hardwareConcurrency', { value: options.cores ?? 8 });
   Object.defineProperty(w.navigator, 'deviceMemory', { value: options.memory ?? 8 });
@@ -179,49 +189,62 @@ async function open(script, options = {}) {
 }
 
 for (const [label, options] of [
-  ['390px phone', { width: 390 }], ['900px tablet', { width: 900 }], ['1023px boundary', { width: 1023 }],
-  ['coarse pointer at desktop width', { finePointer: false }], ['reduced motion', { reducedMotion: true }],
-  ['missing WebGL2 API', { noWebGL2: true }], ['2GB device', { memory: 2 }], ['two-core device', { cores: 2 }],
-  ['data saver', { connection: { saveData: true } }], ['3g network', { connection: { effectiveType: '3g' } }],
-  ['slow downlink', { connection: { downlink: 0.8 } }], ['high network latency', { connection: { rtt: 800 } }],
+  ['reduced motion', { reducedMotion: true }], ['missing WebGL2 API', { noWebGL2: true }],
   ['missing observer API', { noObserver: true }],
 ]) {
   const dom = await open(gateScript, options);
   dom.emit(true); await tick();
-  equal(dom.window.__imports, 0, `${label}: heavy renderer is never imported`);
+  equal(dom.window.__imports, 0, `${label}: renderer is never imported`);
   check(dom.window.document.querySelector('.earth-static img'), `${label}: static fallback remains present`);
   check(!dom.window.document.querySelector('.earth-visual--ready'), `${label}: fallback is never hidden`);
   await dom.finish();
 }
-{
-  const dom = await open(gateScript, { width: 1024 }); const w = dom.window;
-  equal(w.__imports, 0, 'Eligible desktop waits until Earth is near viewport');
-  dom.emit(true); await eventually(() => w.__mounts === 1, 'Eligible desktop did not import renderer');
-  equal(w.__imports, 1, '1024px fine-pointer desktop imports one renderer module');
-  check(!w.document.querySelector('.earth-visual--ready'), 'Fallback remains until renderer confirms a valid frame');
+for (const [label, options] of [
+  ...[320,360,390,430,768,1024,1440].map(width => [`${width}px viewport`, {width, finePointer: width >= 1024}]),
+  ['coarse input on wide screen', {finePointer:false}], ['two-core 2GB phone', {width:390,memory:2,cores:2}],
+  ['data saver', {width:390,connection:{saveData:true}}], ['3g mobile', {width:390,connection:{effectiveType:'3g'}}],
+  ['slow downlink', {connection:{downlink:0.8}}], ['high latency', {connection:{rtt:800}}],
+]) {
+  const dom = await open(gateScript, options); const w = dom.window;
+  equal(w.__imports, 0, `${label}: lazy load waits for visibility`);
+  dom.emit(true); await eventually(() => w.__mounts === 1, `${label}: animated renderer did not mount`);
+  equal(w.__imports, 1, `${label}: animated renderer loads once`);
+  check(!w.document.querySelector('.earth-visual--ready'), `${label}: fallback stays until a valid frame`);
   w.__controls.onReady(); await tick();
-  check(w.document.querySelector('.earth-visual--ready'), 'Renderer readiness progressively reveals canvas');
-  dom.emit(true); dom.emit(true); await tick(); equal(w.__mounts, 1, 'Repeated intersection does not duplicate renderer');
-  dom.narrow(true); await eventually(() => w.__unmounts === 1, 'Resize cleanup did not settle'); equal(w.__unmounts, 1, 'Resize below desktop releases renderer');
-  check(!w.document.querySelector('.earth-visual--ready'), 'Narrow resize restores static visual');
-  dom.narrow(false); dom.emit(true); await eventually(() => w.__mounts === 2, 'Desktop resize failed to recover');
-  equal(w.__imports, 1, 'Desktop resize reuses already-loaded module');
-  w.__controls.onFailure(); await eventually(() => w.__unmounts === 2, 'Failure cleanup did not settle'); equal(w.__unmounts, 2, 'Renderer failure falls back safely');
-  dom.emit(true); await tick(); equal(w.__mounts, 2, 'Failure does not trigger a retry loop');
-  dom.narrow(true); dom.narrow(false); dom.emit(true); await eventually(() => w.__mounts === 3, 'Explicit resize retry failed');
-  dom.connection.change({ saveData: true }); await eventually(() => w.__unmounts === 3, 'Data-saver cleanup did not settle'); equal(w.__unmounts, 3, 'Enabling data saver releases renderer');
-  dom.connection.change({ saveData: false }); dom.emit(true); await eventually(() => w.__mounts === 4, 'Network capability recovery failed');
-  w.matchMedia('(prefers-reduced-motion: reduce)').change(true); await eventually(() => w.__unmounts === 4, 'Reduced-motion cleanup did not settle'); equal(w.__unmounts, 4, 'Enabling reduced motion stops renderer');
+  check(w.document.querySelector('.earth-visual--ready'), `${label}: animated canvas replaces fallback`);
   await dom.finish();
-  check([...dom.media.values()].every(query => query.listeners.size === 0), 'All media-query listeners cleaned up');
-  equal(dom.connectionListeners.size, 0, 'Network listener cleaned up');
-  check(dom.observers.every(observer => observer.targets.size === 0), 'All lazy-load observations disconnected');
+}
+{
+  const dom = await open(gateScript, {width:1440}); const w = dom.window;
+  dom.emit(true); await eventually(() => w.__mounts === 1, 'Initial renderer did not mount');
+  dom.narrow(true); await tick();
+  equal(w.__mounts, 1, 'Resizing to mobile retains the single mounted renderer');
+  equal(w.__unmounts, 0, 'Viewport size alone does not unmount animation');
+  dom.connection.change({saveData:true}); await tick();
+  equal(w.__mounts, 1, 'Data saver changes quality without disabling rotation');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
+  await eventually(() => w.__unmounts === 1, 'Reduced motion must stop renderer');
+  check(!w.document.querySelector('.earth-visual--ready'), 'Reduced motion restores static fallback');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
+  await eventually(() => w.__mounts === 2, 'Animation did not resume after motion preference changed');
+  equal(w.__imports, 1, 'Motion recovery reuses the lazy module');
+  w.__controls.onFailure(); await eventually(() => w.__unmounts === 2, 'Failure must release renderer');
+  dom.emit(true); await tick(); equal(w.__mounts, 2, 'Failure does not start a retry loop');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
+  await eventually(() => w.__mounts === 3, 'Explicit preference recovery can retry');
+  await dom.finish();
+  check([...dom.media.values()].every(query => query.listeners.size === 0), 'Media-query listeners cleaned up');
+  equal(dom.connectionListeners.size, 0, 'No network listener leaked');
+  check(dom.observers.every(observer => observer.targets.size === 0), 'Lazy-load observations disconnected');
 }
 {
   const dom = await open(gateScript); const w = dom.window;
-  dom.emit(true); dom.narrow(true); await tick(); await tick();
-  equal(w.__mounts, 0, 'Import resolving after a narrow resize cannot mount WebGL');
-  dom.narrow(false); dom.emit(true); await eventually(() => w.__mounts === 1, 'Cached import failed to recover after resize race');
+  dom.emit(true); w.matchMedia('(prefers-reduced-motion: reduce)').change(true);
+  await tick(); await tick();
+  equal(w.__mounts, 0, 'Import resolving after reduced-motion change cannot mount WebGL');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); dom.emit(true);
+  await eventually(() => w.__mounts === 1, 'Cached import failed to recover');
   await dom.finish();
 }
 
@@ -270,8 +293,98 @@ for (const [label, options] of [['renderer construction refused', { construction
   equal(dom.frames.pending.size, 0, `${label}: no animation loop starts`);
   await dom.finish();
 }
+for (const fps of [60,30,24,15]) {
+  const frames=scheduler(); let state; let count=0;
+  const loop=createEarthRotationLoop({...frames,initialAngle:0,getTargetFps:()=>fps,onFrame:value=>{state=value;count++},onError:error=>{throw error}});
+  loop.setActive(true);frames.step(0);
+  for(let index=1;index<=10800;index++)frames.step(index*1000/60);
+  closeTo(state.angle,2*Math.PI, `${fps}fps target: angular speed remains one turn per 180 seconds`);
+  if(fps<60)check(count<10801,`${fps}fps: GPU draws are throttled`);
+  loop.dispose();equal(frames.pending.size,0,`${fps}fps: throttled loop disposes`);
+}
+{
+  const capabilities={wide:false,finePointer:false,reducedMotion:false,webgl2:true,observers:true,memory:4,cores:4};
+  const mobile=getEarthRenderProfile(capabilities);
+  check(mobile.mobile&&mobile.lowTextures&&!mobile.pointer,'Mobile profile uses small textures and no pointer tracking');
+  check(mobile.pixelRatios[0]<=1.25,'Mobile internal pixel ratio is capped');
+  const low=getEarthRenderProfile({...capabilities,memory:2});
+  equal(low.initialTier,1,'Constrained devices start at a lower rendering tier');
+  const desktop=getEarthRenderProfile({...capabilities,wide:true,finePointer:true});
+  check(!desktop.lowTextures&&desktop.pointer,'Desktop retains detailed textures and pointer response');
+}
+{
+  const governor=createEarthQualityGovernor(0); let now=0; const changes=[];
+  function sampleWindows(count,interval,cost){for(let index=0;index<count;index++){now+=interval;const result=governor.sample(now,interval,cost);if(result!=='unchanged')changes.push([result,now,governor.tier]);}}
+  sampleWindows(50,50,25);equal(governor.tier,0,'A short slow window does not switch quality');
+  sampleWindows(50,50,25);equal(governor.tier,1,'Sustained measured slowness reduces quality');
+  sampleWindows(80,50,25);equal(governor.tier,1,'Hysteresis prevents rapid repeated quality changes');
+  sampleWindows(120,80,40);equal(governor.tier,2,'Continued poor rendering reaches the lightweight tier');
+  sampleWindows(80,300,160);check(changes.some(([result])=>result==='fallback'),'Severe sustained constraints trigger compatibility fallback');
+  check(changes.filter(([result])=>result==='changed').every((entry,index,list)=>!index||entry[1]-list[index-1][1]>=8000),'Quality transitions respect cooldown');
+  const recover=createEarthQualityGovernor(0);let time=0;
+  for(let index=0;index<100;index++){time+=50;recover.sample(time,50,25)}
+  equal(recover.tier,1,'Recovery scenario first lowers quality');
+  for(let index=0;index<650;index++){time+=33.333;recover.sample(time,33.333,1)}
+  equal(recover.tier,0,'Sustained healthy frames recover quality after the longer cooldown');
+}
+for(const [width,options] of [[390,{finePointer:false}],[768,{finePointer:false}],[1440,{finePointer:true}]]){
+  const dom=await open(rendererScript,{width,...options});const w=dom.window;
+  await eventually(()=>dom.observers.length>0,'Profile renderer setup');dom.emit(true);dom.frames.step(0);
+  equal(w.__allocations,1,`${width}px: one live renderer`);
+  equal(w.__ready,1,`${width}px: valid first frame`);
+  equal(w.__textureURLs.length,3,`${width}px: exactly three texture requests`);
+  if(width<1024){
+    check(w.__textureURLs.every(url=>url.includes('-mobile.webp')),`${width}px: no desktop texture downloads`);
+    check(w.__pixelRatio<=1.25,`${width}px: lower pixel ratio`);
+    equal([...w.__segments],[1,48,32],`${width}px: lighter sphere geometry`);
+    const initial=w.__globe.rotation.y;dom.frames.step(1000/60);check(w.__globe.rotation.y>initial,`${width}px: mobile/tablet mesh actually advances`);
+    const element=w.document.querySelector('.earth-canvas');element.dispatchEvent(new w.Event('pointerenter'));
+    const pointer=new w.Event('pointermove');Object.assign(pointer,{pointerType:'mouse',clientX:490,clientY:490});element.dispatchEvent(pointer);
+    for(let index=2;index<=60;index++)dom.frames.step(index*1000/60);
+    closeTo(w.__tilt.rotation.z,0,`${width}px: pointer tracking remains disabled`);
+    dom.narrow(false);await tick();equal(w.__allocations,1,`${width}px: resizing does not recreate the renderer`);
+  }else check(w.__textureURLs.every(url=>!url.includes('-mobile')), 'Desktop uses retained detailed textures');
+  await dom.finish();equal(w.__disposed.renderer,1,`${width}px: renderer released`);
+}
+{
+ const dom=await open(rendererScript,{width:390,finePointer:false,renderCost:40});const w=dom.window;
+ await eventually(()=>dom.observers.length>0,'Adaptive renderer setup');dom.emit(true);
+ for(let index=0;index<=1400;index++)dom.frames.step(index*1000/60);
+ equal(w.__allocations,1,'Adaptive quality uses the same renderer');
+ equal(w.document.querySelector('.earth-canvas').dataset.earthQuality,'2','Measured slow rendering lowers actual renderer quality');
+ check(w.__pixelRatio<1,'Adaptive mode reduces the internal rendering resolution');
+ equal(w.__globe.children[1].visible,false,'Lowest tier removes optional cloud overdraw');
+ equal(w.__failures,0,'Moderate slow rendering retains animation');await dom.finish();
+}
+
+for (const renderCost of [1,200]) {
+ const dom=await open(integratedScript,{width:390,finePointer:false,renderCost});const w=dom.window;
+ dom.emit(true);await eventually(()=>w.__allocations===1,'Mobile integration lazy allocation');
+ await eventually(()=>dom.observers.length>=2,'Mobile integration renderer observer');dom.emit(true);dom.frames.step(0);await tick();
+ check(w.document.querySelector('.earth-visual--ready'),'Integrated mobile globe reveals a valid animated canvas');
+ const start=w.__globe.rotation.y;
+ if(renderCost===1){
+  for(let index=1;index<=60;index++)dom.frames.step(index*1000/60);
+  check(w.__globe.rotation.y>start,'Integrated mobile globe rotation advances');
+  equal(w.__allocations,1,'Integrated animation owns one renderer');
+ }else{
+  for(let index=1;index<=1500&&dom.frames.pending.size;index++)dom.frames.step(index*1000/60);
+  await eventually(()=>!w.document.querySelector('canvas'),'Severe performance fallback releases mobile canvas');
+  check(!w.document.querySelector('.earth-visual--ready'),'Severe performance fallback restores static image visibility');
+  equal(w.__disposed.renderer,1,'Severe fallback disposes the renderer');
+  equal(dom.frames.pending.size,0,'Severe fallback leaves no RAF loop');
+ }
+ await dom.finish();
+}
+{
+ const css=await readFile(path.join(project,'src/components/earth.css'),'utf8');
+ check(!/\.earth-canvas\s*\{[^}]*display\s*:\s*none/.test(css),'Shipped Earth CSS never hides the canvas by viewport width');
+ let bytes=0;
+ for(const name of ['day','night','clouds'])bytes+=(await stat(path.join(project,`public/earth/${name}-mobile.webp`))).size;
+ check(bytes>0&&bytes<160000,'Mobile texture set stays within its compressed asset budget');
+}
 console.log(`PASS: ${assertions} Earth assertions. Actual React gate, production clock and renderer lifecycle tested with DOM/Three mocks.`);
-console.log('  ✓ No desktop-module import on phone/tablet/reduced motion/unsupported API/low capability/slow network');
-console.log('  ✓ One 180-second rotation, pause/resume without jumps, one RAF, local pointer damping and full disposal');
-console.log('  ✓ Valid-frame readiness, shader/context/texture/constructor fallback, resize and import-race recovery');
+console.log('  ✓ Animated renderer on mobile, tablet and desktop; accessibility/API fallbacks retained');
+console.log('  ✓ Same rotation speed at different draw targets, one RAF, pause/resume, mobile textures and no mobile pointer tracking');
+console.log('  ✓ Measured quality adaptation with hysteresis, renderer reuse, error recovery and resource disposal');
 console.log('LIMIT: No browser/GPU renderer available; real WebGL shader compilation, visual smoothness and frame rate are not measured.');

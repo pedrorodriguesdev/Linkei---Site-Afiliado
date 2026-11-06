@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
-import { canAnimateEarth, type EarthConnection } from './earthRuntime';
+import { canAnimateEarth } from './earthRuntime';
 import './earth.css';
 
 type DesktopProps = { onReady: () => void; onFailure: () => void };
 
-/** Decorative Earth. Capability checks run before importing the Three.js entry point. */
+/** Adaptive animated Earth on every screen; accessibility and API checks precede the lazy import. */
 export default function EarthVisual({ className = '', compact = false }: { className?: string; compact?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   const [Desktop, setDesktop] = useState<ComponentType<DesktopProps> | null>(null);
@@ -13,16 +13,11 @@ export default function EarthVisual({ className = '', compact = false }: { class
 
   useEffect(() => {
     if (typeof matchMedia !== 'function' || typeof IntersectionObserver !== 'function' || typeof ResizeObserver !== 'function') return;
-    const screen = matchMedia('(min-width: 1024px)');
-    const pointer = matchMedia('(pointer: fine) and (hover: hover)');
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    const device = navigator as Navigator & { deviceMemory?: number; connection?: EarthConnection };
-    const connection = device.connection;
     const eligible = () => canAnimateEarth({
-      wide: screen.matches, finePointer: pointer.matches, reducedMotion: motion.matches,
+      reducedMotion: motion.matches,
       // Three r180 requires WebGL2. This API check does not allocate a throwaway context.
       webgl2: typeof window.WebGL2RenderingContext === 'function', observers: true,
-      memory: device.deviceMemory, cores: device.hardwareConcurrency, connection,
     });
     let active = true;
     let near = false;
@@ -66,18 +61,12 @@ export default function EarthVisual({ className = '', compact = false }: { class
       } else observer.observe(container.current!);
     };
     update();
-    screen.addEventListener('change', update);
-    pointer.addEventListener('change', update);
     motion.addEventListener('change', update);
-    connection?.addEventListener?.('change', update);
     return () => {
       active = false;
       failure.current = () => {};
       observer.disconnect();
-      screen.removeEventListener('change', update);
-      pointer.removeEventListener('change', update);
       motion.removeEventListener('change', update);
-      connection?.removeEventListener?.('change', update);
     };
   }, []);
 

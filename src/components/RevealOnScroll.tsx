@@ -10,6 +10,7 @@ type Props = HTMLAttributes<HTMLElement> & {
   threshold?: number;
   rootMargin?: string;
   disabled?: boolean;
+  mobileDelay?: number;
 };
 type RevealEntry = (entry: IntersectionObserverEntry) => void;
 const pools = new Map<string, { observer: IntersectionObserver; entries: Map<Element, RevealEntry> }>();
@@ -37,7 +38,7 @@ function observe(element: Element, callback: RevealEntry, threshold: number, roo
 /** Visible HTML first. Only offscreen content is armed; motion never gates interaction. */
 export default function RevealOnScroll({
   as: Tag = 'div', variant = 'fade-up', delay = 0, duration = 550,
-  threshold = 0.1, rootMargin = '0px 0px 64px 0px', disabled = false,
+  mobileDelay, threshold = 0.1, rootMargin = '0px 0px 64px 0px', disabled = false,
   style, children, ...attributes
 }: Props) {
   const element = useRef<HTMLElement>(null);
@@ -97,7 +98,7 @@ export default function RevealOnScroll({
 
   const timing = {
     '--reveal-delay': `${Math.max(0, Math.min(delay, 350))}ms`,
-    '--reveal-delay-mobile': `${Math.max(0, Math.min(delay * 0.7, 150))}ms`,
+    '--reveal-delay-mobile': `${Math.max(0, Math.min(mobileDelay ?? delay * 0.7, 150))}ms`,
     '--reveal-duration': `${Math.max(200, Math.min(duration, 700))}ms`,
     ...style,
   } as CSSProperties;

@@ -146,20 +146,25 @@ for (const [route, title] of [['/', 'Descubra ferramentas'], ['/produtos', 'Expl
   check($(dom, 'h1').textContent.includes(title), `${route}: correct main content`);
   equal($$(dom, 'header .desktop-nav a').length, 5, `${route}: shared navigation`);
   check($(dom, 'footer'), `${route}: shared footer`);
-  check(!$(dom, 'canvas'), `${route}: mobile uses static Earth without WebGL`);
+  check(!$(dom, 'canvas'), `${route}: unavailable WebGL API retains the static fallback`);
   if (route === '/redes') equal($$(dom, '.social-card a').map(link => link.href), ['https://www.instagram.com/elevon.n/', 'https://www.tiktok.com/@llooping0', 'https://x.com/LinkouDigital'], 'Exact three official social destinations');
   dom.window.close();
 }
-messages.push('All 11 valid routes, shared navigation/footer, page metadata, mobile static Earth and official social links');
+messages.push('All 11 valid routes, shared navigation/footer, page metadata, WebGL-unavailable fallback and official social links');
 
 {
   const dom = await open('/produtos');
   equal($$(dom, '.product-card').length, 6, 'Catalog contains exactly six offers');
+  check($(dom,'.catalog-experience'), 'Catalog keeps a continuous hero/storefront wrapper');
+  equal($(dom,'#catalog-heading').textContent,'Encontre seu próximo passo.','Catalog discovery heading preserved');
+  equal($$(dom,'.product-card').map(card=>card.style.getPropertyValue('--reveal-delay-mobile')), ['0ms','50ms','100ms','0ms','50ms','100ms'], 'Mobile cards use short row-based stagger delays');
+  equal($$(dom,'footer [data-reveal]').length,2,'Footer groups use progressive reveals');
   equal($$(dom, '.product-media').length, 6, 'Catalog reserves six media areas');
   check($$(dom, '.product-media').every(media => media.children.length === 0 && !media.textContent.trim()), 'All product image containers remain empty');
   check(!$(dom, '.product-card img'), 'No generated or placeholder product images');
   await type(dom, $(dom, '.catalog-toolbar input'), 'edicao');
   equal($$(dom, '.product-card h3').map(node => node.textContent), ['Edição Dinâmica com CapCut'], 'Search is accent insensitive');
+  equal($(dom,'.product-card').dataset.revealState,'visible','Search results appear immediately without waiting for animation');
   await type(dom, $(dom, '.catalog-toolbar input'), '');
   await click(dom, $$(dom, '.filter-button').find(button => button.textContent.includes('Ferramentas')));
   equal($$(dom, '.product-card h3').map(node => node.textContent), ['LiveGo Pro'], 'Tools filter shows the one tool');

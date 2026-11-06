@@ -12,3 +12,6 @@ The static transparent Earth images were generated from an orthographic spherica
 Mobile: earth-mobile.webp (static only).
 Desktop fallback: earth-static.webp.
 Desktop WebGL sphere: day.webp, night.webp and clouds.webp.
+
+V3 mobile texture variants: day-mobile.webp, night-mobile.webp and clouds-mobile.webp.
+Derived locally from the preserved textures above, resized to 768x384 with Lanczos filtering and compressed as WebP. No product imagery was generated.

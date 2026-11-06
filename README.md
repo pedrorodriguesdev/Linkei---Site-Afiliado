@@ -41,9 +41,15 @@ Slugs: `seja-seu-chefe`, `metodo-tiktok-shop`, `ia-academy`, `primeira-venda-24h
 
 ## Globo e desempenho
 
-O desktop a partir de 1024px, com ponteiro preciso e recursos adequados, carrega Three.js em um bundle separado quando o globo se aproxima da área visível. A presença da API WebGL2 é verificada sem criar um contexto descartável; a própria criação do renderer confirma o suporte real. O shader combina texturas geográficas diurnas e noturnas, nuvens e atmosfera. A rotação dura aproximadamente 180 segundos. A animação pausa fora da tela ou com a aba oculta; os recursos da GPU são descartados ao desmontar.
+A Terra é animada em desktop, tablet e celular quando WebGL2 está disponível e a preferência de movimento permite. Three.js continua em um bundle separado, importado quando o globo se aproxima da área visível. A verificação da API não cria um contexto descartável; a criação do renderer confirma o suporte real. O shader combina texturas geográficas diurnas/noturnas, nuvens e atmosfera, com espaços de cor corretos e saída sRGB. As luzes urbanas reais são atenuadas no lado diurno.
 
-No celular e tablet, em preferência por movimento reduzido, em economia de dados, em conexões lentas ou com memória/processamento limitados, o site usa apenas a projeção estática WebP. Não inicializa WebGL nem carrega Three.js nesses casos. O fallback só desaparece após o primeiro quadro válido; falhas de shader, contexto ou textura preservam a imagem estática. Mudanças de viewport e de preferências desmontam a cena com limpeza de recursos. As fontes das texturas estão em `public/earth/SOURCES.txt`; a licença da fonte está em `public/fonts/OFL.txt`.
+A rotação completa uma volta em aproximadamente 180 segundos e as nuvens em 210 segundos. Um único requestAnimationFrame atualiza diretamente os objetos 3D, sem renderização React a cada quadro. Desenhos em frequência menor preservam a velocidade angular. O relógio é reiniciado depois de pausas para evitar saltos; a animação pausa fora da tela ou com a aba oculta.
+
+O perfil móvel usa texturas WebP derivadas dos mesmos mapas reais, com 768×384 pixels (aproximadamente 112 KB somadas), geometria menor e DPR limitado inicialmente a 1,15. Não há pointer tracking no perfil móvel. Desktop usa as texturas detalhadas preservadas e DPR até 1,5. As informações de memória, processamento e conexão só escolhem o perfil inicial, sem desativar a rotação por largura.
+
+O controlador adaptativo observa os intervalos entre desenhos e o tempo da chamada de renderização em janelas de pelo menos dois segundos. Dois períodos ruins reduzem a qualidade; cinco períodos saudáveis permitem recuperação, respeitando intervalos mínimos de 8 segundos para reduzir e 15 segundos para recuperar. Os níveis reduzem resolução, limitam desenhos a 60/30/24 por segundo e retiram a camada opcional de nuvens no nível mínimo. Isso não representa FPS medido em aparelhos reais. Não há recriação do renderer nessas trocas nem durante resize. Texturas escolhidas no início da cena são reutilizadas em resize, evitando downloads duplicados.
+
+A projeção estática permanece durante o carregamento e só desaparece após um quadro válido. Movimento reduzido, API incompatível, falhas de shader/contexto/textura ou limitação severa persistente de renderização usam esse fallback. Tamanho de tela, toque e economia de dados, isoladamente, não desativam a rotação. Todos os recursos são liberados ao desmontar. As fontes estão em `public/earth/SOURCES.txt`; a licença da fonte tipográfica está em `public/fonts/OFL.txt`.
 
 ## Conteúdo e privacidade
 
@@ -65,3 +71,20 @@ Não há banco de dados, cadastro, carrinho ou checkout interno. A preferência 
 ### Verificação V2
 
 `npm run verify` executa os testes DOM e os testes de lógica/ciclo de vida do globo. Os testes usam jsdom, IntersectionObserver controlado e um renderer Three simulado; verificam transições, navegação, fallback, avanço da rotação, pausas e liberação de recursos. Esses testes não comprovam qualidade visual nem a execução real dos shaders em uma GPU. Não foram realizadas inspeção em navegador real, medições Lighthouse/Core Web Vitals ou certificação de acessibilidade neste ambiente.
+
+## Refinamento V3: rotação universal e mobile
+
+A causa da Terra estática era a política V2: `canAnimateEarth` exigia viewport >=1024px e ponteiro preciso, enquanto uma media query escondia o canvas abaixo de 1024px. Ambas as restrições foram removidas. O arquivo `DesktopEarth.tsx` mantém o nome existente por compatibilidade, mas agora renderiza também em celular e tablet.
+
+O catálogo móvel preserva “Explore nossas ofertas digitais.” e “Encontre seu próximo passo.”, com Terra centralizada, ponte visual suave até a vitrine, busca de 51px, filtros horizontais e uma oferta por linha. Os espaços de mídia continuam vazios. O sistema de reveal existente foi reutilizado e estendido ao rodapé; o stagger móvel pode ser ajustado separadamente, com entradas de 50ms entre cards adjacentes. A navegação continua nativa e o movimento reduzido mostra o conteúdo imediatamente.
+
+### Arquivos V3
+
+- `src/components/EarthVisual.tsx`, `DesktopEarth.tsx`, `earthRuntime.ts`, `earth.css`: política universal, perfis, rotação, shaders, adaptação e fallback.
+- `public/earth/day-mobile.webp`, `night-mobile.webp`, `clouds-mobile.webp`, `SOURCES.txt`: mapas móveis derivados e documentação.
+- `src/main.tsx`, `src/refinements.css`: hero, transição ao catálogo, vitrine, filtros, detalhes e rodapé.
+- `src/components/RevealOnScroll.tsx`, `reveal.css`: tempo móvel configurável e movimento de entrada.
+- `scripts/verify-earth.mjs`, `scripts/verify.mjs`: regressões, rotação em diferentes frequências, integração mobile e adaptação simulada.
+- `README.md`: documentação atualizada.
+
+As verificações usam DOM e renderer simulado. Não comprovam renderização real dos shaders, ausência de overflow visual, qualidade de imagem, suavidade em GPU real ou Core Web Vitals. Esses pontos precisam de inspeção em navegador real, indisponível neste ambiente.
