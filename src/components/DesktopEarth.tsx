@@ -21,6 +21,7 @@ const surfaceShader = `
   uniform sampler2D cloudMap;
   uniform float integratedClouds;
   uniform float cloudShift;
+  uniform float cityExposure;
   uniform vec3 sunDirection;
   varying vec2 vUv;
   varying vec3 vNormal;
@@ -29,29 +30,46 @@ const surfaceShader = `
     vec3 normal = normalize(vNormal);
     vec3 view = normalize(cameraPosition - vPosition);
     float sun = dot(normal, sunDirection);
-    float daylight = smoothstep(-0.12, 0.38, sun);
+    float daylight = smoothstep(-0.10, 0.20, sun);
     vec3 day = texture2D(dayMap, vUv).rgb;
     vec3 night = texture2D(nightMap, vUv).rgb;
-    float illumination = 0.40 + 0.78 * pow(max(sun, 0.0), 0.65);
-    // The atlas contains blue terrain as well as lights. Only warm excess contributes emission.
-    float warmLights = max(night.r - night.b * 0.82 - 0.008, 0.0);
-    float cityLights = pow(clamp(warmLights * 7.5, 0.0, 1.0), 0.68);
-    float nightSide = 1.0 - smoothstep(-0.12, 0.23, sun);
-    vec3 darkness = day * vec3(0.055, 0.095, 0.19);
-    // Soft cloud shadow adds depth without another geometry or render pass.
-    float cloudShadow = texture2D(cloudMap, vec2(fract(vUv.x + cloudShift + 0.002), vUv.y)).r;
-    vec3 color = mix(darkness, day * illumination * (1.0 - cloudShadow * 0.13), daylight);
-    color += vec3(2.1, 1.28, 0.46) * cityLights * nightSide;
+    // The sRGB albedo is decoded by Three/WebGL. All lighting below is linear.
+    // Preserve bathymetry, coastlines and land biomes from the geographic atlas.
+    float ocean = smoothstep(0.004, 0.035, day.b - max(day.r, day.g));
+    float sunHeight = max(sun, 0.0);
+    vec3 albedo = mix(day, day * vec3(0.76, 0.93, 1.06), ocean * 0.34);
+    vec3 direct = vec3(1.08, 1.04, 0.98) * pow(sunHeight, 0.82);
+    vec3 darkness = albedo * vec3(0.11, 0.16, 0.24) + vec3(0.0008, 0.0012, 0.0024);
+    vec3 color = mix(darkness, albedo * (vec3(0.12, 0.145, 0.18) + direct), daylight);
+
+    // Warm excess excludes the blue terrain in the night atlas. A soft shoulder
+    // retains differences between cities instead of clipping whole urban regions.
+    float warmLights = max(night.r - night.b * 0.95 - 0.008, 0.0);
+    float cityLights = sqrt(1.0 - exp(-warmLights * 9.0 * cityExposure));
+    float nightSide = 1.0 - smoothstep(-0.18, 0.16, sun);
+    vec3 cityColor = mix(vec3(1.0, 0.48, 0.16), vec3(1.0, 0.86, 0.64), smoothstep(0.25, 0.90, cityLights));
+    color += cityColor * cityLights * nightSide * (1.0 - ocean);
+
+    // One offset atlas sample gives soft cloud shadows; no shadow maps or pass.
+    vec2 cloudUv = vec2(fract(vUv.x + cloudShift), vUv.y);
+    vec2 shadowUv = vec2(fract(cloudUv.x + 0.0018), min(cloudUv.y + 0.0009, 1.0));
+    float cloudShadow = smoothstep(0.08, 0.82, texture2D(cloudMap, shadowUv).r);
+    color *= 1.0 - cloudShadow * (0.10 + 0.13 * daylight);
     if (integratedClouds > 0.5) {
-      float density = smoothstep(0.025, 0.88, texture2D(cloudMap, vec2(fract(vUv.x + cloudShift), vUv.y)).r);
-      vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
-      color = mix(color, cloudColor, density * 0.76);
+      float density = smoothstep(0.06, 0.84, texture2D(cloudMap, cloudUv).r);
+      vec3 cloudColor = vec3(0.87, 0.94, 1.0) * (0.065 + 0.94 * pow(sunHeight, 0.75));
+      color = mix(color, cloudColor, density * (0.42 + 0.32 * daylight));
     }
-    float ocean = smoothstep(0.0, 0.12, day.b - day.r);
-    float specular = pow(max(dot(reflect(-sunDirection, normal), view), 0.0), 28.0);
-    color += vec3(0.18, 0.31, 0.45) * specular * ocean * daylight * 0.3;
-    float fresnel = pow(1.0 - max(dot(normal, view), 0.0), 3.0);
-    color += vec3(0.045, 0.27, 0.62) * fresnel * (0.28 + 0.72 * max(sun, 0.0));
+    // Dielectric water: a restrained broad sun glint plus a finer highlight.
+    // Both depend on light AND view; neither creates a metallic ocean fill.
+    vec3 halfway = normalize(sunDirection + view);
+    float fresnelWater = 0.02 + 0.98 * pow(1.0 - max(dot(view, halfway), 0.0), 5.0);
+    float specular = pow(max(dot(normal, halfway), 0.0), 110.0);
+    float broadGlint = pow(max(dot(normal, halfway), 0.0), 28.0);
+    color += vec3(0.72, 0.87, 1.0) * (specular * 2.8 + broadGlint * 0.20)
+      * fresnelWater * ocean * sunHeight * (1.0 - cloudShadow * 0.75);
+    float fresnel = pow(1.0 - max(dot(normal, view), 0.0), 4.0);
+    color += vec3(0.025, 0.16, 0.38) * fresnel * (0.04 + 0.30 * daylight);
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
   }
@@ -63,10 +81,10 @@ const cloudsShader = `
   varying vec3 vNormal;
   void main() {
     float sun = dot(normalize(vNormal), sunDirection);
-    float amount = smoothstep(-0.12, 0.38, sun);
-    float cloud = smoothstep(0.025, 0.88, texture2D(cloudMap, vUv).r);
-    vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
-    gl_FragColor = vec4(cloudColor, cloud * (0.32 + 0.53 * amount));
+    float amount = smoothstep(-0.10, 0.20, sun);
+    float cloud = smoothstep(0.06, 0.84, texture2D(cloudMap, vUv).r);
+    vec3 cloudColor = vec3(0.87, 0.94, 1.0) * (0.065 + 0.94 * pow(max(sun, 0.0), 0.75));
+    gl_FragColor = vec4(cloudColor, cloud * (0.42 + 0.32 * amount));
     #include <colorspace_fragment>
   }
 `;
@@ -77,11 +95,14 @@ const atmosphereShader = `
   varying vec3 vPosition;
   void main() {
     vec3 view = normalize(cameraPosition - vPosition);
-    float rim = pow(1.0 - abs(dot(normalize(vNormal), view)), 4.5);
-    float light = 0.28 + 0.72 * max(dot(normalize(vNormal), sunDirection), 0.0);
-    float dayLimb = smoothstep(-0.18, 0.5, dot(normalize(vNormal), sunDirection));
-    vec3 atmosphereColor = mix(vec3(0.19, 0.22, 0.50), vec3(0.20, 0.57, 0.92), dayLimb);
-    gl_FragColor = vec4(atmosphereColor, rim * light * (0.78 + pointerPresence * 0.10));
+    float facing = abs(dot(normalize(vNormal), view));
+    // Fade both the inner limb and the outer silhouette to avoid a neon band.
+    float rim = pow(1.0 - facing, 3.6) * smoothstep(0.0, 0.16, facing);
+    float sun = dot(normalize(vNormal), sunDirection);
+    float dayLimb = smoothstep(-0.22, 0.35, sun);
+    float light = 0.13 + 0.87 * dayLimb;
+    vec3 atmosphereColor = mix(vec3(0.055, 0.065, 0.17), vec3(0.12, 0.42, 0.78), dayLimb);
+    gl_FragColor = vec4(atmosphereColor, rim * light * (0.62 + pointerPresence * 0.04));
     #include <colorspace_fragment>
   }
 `;
@@ -152,6 +173,9 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatios[quality()]));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      // Keep albedo and emission in linear light, then convert once at output.
+      // Avoid a second filmic/gamma transform of the geographic texture colors.
+      renderer.toneMapping = THREE.NoToneMapping;
       renderer.setClearColor(0x000000, 0);
       renderer.debug.checkShaderErrors = true;
       renderer.debug.onShaderError = () => { shaderFailed = true; };
@@ -166,7 +190,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       const globe = new THREE.Group();
       globe.rotation.y = -25 * Math.PI / 180;
       group.add(globe);
-      const sun = new THREE.Vector3(-0.8, 0.45, 0.4).normalize();
+      const sun = new THREE.Vector3(-0.8, 0.45, 0.2).normalize();
       const loader = new THREE.TextureLoader();
       const texture = (url: string) => new Promise<THREE.Texture>((resolve, reject) => loader.load(url, t => {
         if (disposed || failed) { t.dispose(); reject(new Error('Earth no longer active')); return; }
@@ -182,18 +206,19 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       Promise.all([texture(`/earth/day${suffix}.webp`), texture(`/earth/city-lights${suffix}.webp`), texture(`/earth/clouds${suffix}.webp`)]).then(([day, night, clouds]) => {
         if (disposed || failed) return;
         const geometry = new THREE.SphereGeometry(1, ...profile.segments); geometries.push(geometry);
-        const surface = new THREE.ShaderMaterial({ vertexShader, fragmentShader: surfaceShader, uniforms: { dayMap: { value: day }, nightMap: { value: night }, cloudMap: { value: clouds }, integratedClouds: { value: 0 }, cloudShift: { value: 0 }, sunDirection: { value: sun } } });
+        const surface = new THREE.ShaderMaterial({ vertexShader, fragmentShader: surfaceShader, uniforms: { dayMap: { value: day }, nightMap: { value: night }, cloudMap: { value: clouds }, integratedClouds: { value: 0 }, cloudShift: { value: 0 }, cityExposure: { value: profile.mobile ? 1.22 : 1.0 }, sunDirection: { value: sun } } });
         const cloudMaterial = new THREE.ShaderMaterial({ vertexShader, fragmentShader: cloudsShader, transparent: true, depthWrite: false, uniforms: { cloudMap: { value: clouds }, sunDirection: { value: sun } } });
         const atmosphere = new THREE.ShaderMaterial({ vertexShader, fragmentShader: atmosphereShader, side: THREE.BackSide, transparent: true, depthWrite: false, uniforms: { sunDirection: { value: sun }, pointerPresence: { value: 0 } } });
         materials.push(surface, cloudMaterial, atmosphere);
         globe.add(new THREE.Mesh(geometry, surface));
         const cloudMesh = new THREE.Mesh(geometry, cloudMaterial); cloudMesh.scale.setScalar(1.008); globe.add(cloudMesh);
-        const atmosphereMesh = new THREE.Mesh(geometry, atmosphere); atmosphereMesh.scale.setScalar(1.025); group.add(atmosphereMesh);
+        const atmosphereMesh = new THREE.Mesh(geometry, atmosphere); atmosphereMesh.scale.setScalar(1.020); group.add(atmosphereMesh);
         const applyQuality = () => {
           renderer!.setPixelRatio(Math.min(window.devicePixelRatio || 1, profile.pixelRatios[quality()]));
           if (hasSize) renderer!.setSize(element.clientWidth, element.clientHeight, false);
           cloudMesh.visible = quality() < 2;
           surface.uniforms.integratedClouds.value = quality() === 2 ? 1 : 0;
+          surface.uniforms.cityExposure.value = profile.mobile ? 1.22 : 1.0;
           element.dataset.earthProfile = profile.mobile ? 'mobile' : 'desktop';
           element.dataset.earthQuality = String(quality());
         };

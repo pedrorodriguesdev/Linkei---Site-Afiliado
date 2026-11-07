@@ -90,7 +90,7 @@ const threeStub = `
     getContext(){return {isContextLost(){return Boolean(globalThis.__contextLost)}}}
     dispose(){globalThis.__disposed.renderer++}forceContextLoss(){globalThis.__disposed.context++}
   }
-  export const BackSide=1;export const AdditiveBlending=2;export const SRGBColorSpace='srgb';export const NoColorSpace='';export const LinearMipmapLinearFilter=3;export const LinearFilter=4;
+  export const BackSide=1;export const AdditiveBlending=2;export const SRGBColorSpace='srgb';export const NoColorSpace='';export const NoToneMapping=0;export const LinearMipmapLinearFilter=3;export const LinearFilter=4;
 `;
 async function bundle(entry, mock) {
   const built = await build({
