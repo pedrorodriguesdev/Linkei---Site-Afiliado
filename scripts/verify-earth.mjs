@@ -134,6 +134,7 @@ async function open(script, options = {}) {
   virtualConsole.on('error', (...args) => errors.push(args.map(String).join(' ')));
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: options.debug ? 'https://earth.test/?globeDebug=1' : 'https://earth.test', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const w = dom.window;
+  if(options.preference)w.localStorage.setItem('elevon-earth',options.preference);
   Object.defineProperty(w.performance, 'now', { value: () => w.__perfTime });
   Object.defineProperty(w, 'devicePixelRatio', { value: 3, configurable: true });
   Object.assign(w, { __imports: 0, __mounts: 0, __unmounts: 0, __ready: 0, __failures: 0, __allocations: 0, __renderCount: 0,
@@ -200,7 +201,7 @@ for (const [label, options] of [
 }
 for (const [label, options] of [
   ...[320,360,390,430,768,1024,1440].map(width => [`${width}px viewport`, {width, finePointer: width >= 1024}]),
-  ['system prefers reduced motion', {reducedMotion:true}], ['constructor probe missing but real renderer works', {noWebGL2:true}],
+  ['constructor probe missing but real renderer works', {noWebGL2:true}],
   ['coarse input on wide screen', {finePointer:false}], ['two-core 2GB phone', {width:390,memory:2,cores:2}],
   ['data saver', {width:390,connection:{saveData:true}}], ['3g mobile', {width:390,connection:{effectiveType:'3g'}}],
   ['slow downlink', {connection:{downlink:0.8}}], ['high latency', {connection:{rtt:800}}],
@@ -223,11 +224,12 @@ for (const [label, options] of [
   dom.connection.change({saveData:true}); await tick();
   equal(w.__mounts, 1, 'Data saver changes quality without disabling rotation');
   w.matchMedia('(prefers-reduced-motion: reduce)').change(true); await tick();
-  equal(w.__mounts,1,'Owner-requested automatic Earth keeps running after OS preference changes');
-  equal(w.__unmounts,0,'Earth has no preference-triggered click-to-start state');
-  equal(w.document.querySelectorAll('.earth-visual button').length,0,'No start/pause controls remain');
-  w.__controls.onFailure(); await eventually(() => w.__unmounts === 1, 'Actual rendering failure releases renderer');
-  dom.emit(true); await tick(); equal(w.__mounts,1,'A graphics failure does not start an uncontrolled retry loop');
+  equal(w.__mounts,1,'Changing reduced-motion preference does not allocate another renderer');
+  await eventually(()=>w.__unmounts===1,'Reduced motion immediately releases the existing renderer');
+  w.matchMedia('(prefers-reduced-motion: reduce)').change(false); await tick();dom.emit(true);
+  await eventually(()=>w.__mounts===2,'Animation resumes when motion is allowed');
+  w.__controls.onFailure(); await eventually(() => w.__unmounts === 2, 'Actual rendering failure releases renderer');
+  dom.emit(true); await tick(); equal(w.__mounts,2,'A graphics failure does not start an uncontrolled retry loop');
   await dom.finish();
   check([...dom.media.values()].every(query => query.listeners.size === 0), 'Media-query listeners cleaned up');
   equal(dom.connectionListeners.size, 0, 'No network listener leaked');
@@ -380,7 +382,7 @@ for (const renderCost of [1,200]) {
 }
 
 {
- const dom=await open(integratedScript,{width:1440,reducedMotion:true,debug:true});const w=dom.window;
+ const dom=await open(integratedScript,{width:1440,debug:true});const w=dom.window;
  dom.emit(true);await eventually(()=>w.__allocations===1,'Earth starts automatically without clicking');
  await eventually(()=>dom.observers.length>=2,'Automatic renderer observer');dom.emit(true);dom.frames.step(0);await tick();
  equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Automatic startup reaches a valid running frame');
@@ -410,8 +412,31 @@ for (const renderCost of [1,200]) {
  equal(w.document.querySelectorAll('.earth-visual button').length,0,'Even diagnostic failures do not add visitor controls');
  check(!w.document.querySelector('canvas'),'Failed shader canvas is removed');await dom.finish();
 }
+
+for (const options of [{preference:'static'},{reducedMotion:true},{preference:'animated',reducedMotion:true}]) {
+ const dom=await open(integratedScript,options);dom.emit(true);await tick();
+ equal(dom.window.__allocations,0,'Static/reduced motion allocates no renderer');
+ equal(dom.frames.pending.size,0,'Static/reduced motion has no animation loop');
+ check(dom.window.document.querySelector('.earth-static img'),'Static fallback remains visible');
+ await dom.finish();
+}
+{
+ const dom=await open(integratedScript);const w=dom.window;
+ dom.emit(true);await eventually(()=>w.__allocations===1,'Preference test starts renderer');
+ await eventually(()=>dom.observers.length>=2,'Preference test renderer observer');dom.emit(true);dom.frames.step(0);await tick();
+ const select=w.document.querySelector('select[aria-label="Movimento do globo"]');
+ select.value='static';select.dispatchEvent(new w.Event('change',{bubbles:true}));
+ await eventually(()=>w.__disposed.renderer===1,'Selecting static disposes GPU resources');
+ equal(w.localStorage.getItem('elevon-earth'),'static','Static choice persists');
+ equal(dom.frames.pending.size,0,'Static selection cancels frame loop');
+ select.value='animated';select.dispatchEvent(new w.Event('change',{bubbles:true}));await tick();dom.emit(true);
+ await eventually(()=>w.__allocations===2,'Animated selection resumes renderer');
+ equal(w.localStorage.getItem('elevon-earth'),'animated','Animated choice persists');
+ await dom.finish();
+}
+
 console.log(`PASS: ${assertions} Earth assertions. Actual React gate, production clock and renderer lifecycle tested with DOM/Three mocks.`);
-console.log('  ✓ Automatic renderer on mobile, tablet and desktop; no click-to-play gate or visible controls');
+console.log('  ✓ Automatic renderer on mobile, tablet and desktop; static and reduced-motion preferences');
 console.log('  ✓ Same rotation speed at different draw targets, one RAF, pause/resume, mobile textures and no mobile pointer tracking');
 console.log('  ✓ Measured quality adaptation with hysteresis, renderer reuse, error recovery and resource disposal');
 console.log('LIMIT: No browser/GPU renderer available; real WebGL shader compilation, visual smoothness and frame rate are not measured.');

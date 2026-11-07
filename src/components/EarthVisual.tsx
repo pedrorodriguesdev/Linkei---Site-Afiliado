@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
 import './earth.css';
 
-type EarthStatus = 'loading' | 'running' | 'unsupported' | 'initialization' | 'texture' | 'shader' | 'context' | 'performance' | 'frame';
+type EarthStatus = 'static' | 'reduced' | 'loading' | 'running' | 'unsupported' | 'initialization' | 'texture' | 'shader' | 'context' | 'performance' | 'frame';
 type RendererProps = { onReady: () => void; onFailure: (reason?: string) => void };
 const explanations: Record<EarthStatus, string> = {
+  static: 'Globo estático selecionado', reduced: 'Movimento reduzido ativado no dispositivo',
   loading: 'Preparando a animação…', running: 'Rotação automática ativada',
   unsupported: 'O navegador não disponibilizou os recursos necessários para iniciar a animação.',
   initialization: 'O navegador não conseguiu iniciar a visualização 3D.',
@@ -36,9 +37,28 @@ function EarthDiagnostics({ container, status }: { container: RefObject<HTMLDivE
   return <aside className="earth-diagnostics" aria-label="Diagnóstico da animação"><strong>Diagnóstico do globo</strong><pre>{`Estado: ${status}\n${explanations[status]}\n${report}`}</pre></aside>;
 }
 
-/** Automatic continuous Earth, as requested by the site owner. No visitor action is required. */
+type EarthPreference = 'auto' | 'animated' | 'static';
+function storedPreference(): EarthPreference {
+  try { const saved = localStorage.getItem('elevon-earth'); return saved === 'static' || saved === 'animated' ? saved : 'auto'; }
+  catch { return 'auto'; }
+}
+/** Visibility-gated renderer. Static and reduced-motion modes allocate no GPU resources. */
 export default function EarthVisual({ className = '', compact = false }: { className?: string; compact?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
+  const [preference, setPreference] = useState<EarthPreference>(storedPreference);
+  const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const media = matchMedia('(prefers-reduced-motion: reduce)');
+    const changed = () => setReduced(media.matches);
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  const choosePreference = (value: EarthPreference) => {
+    setPreference(value);
+    try { localStorage.setItem('elevon-earth', value); } catch { /* Private browsing remains usable. */ }
+  };
+  const animate = preference !== 'static' && !reduced;
   const [Renderer, setRenderer] = useState<ComponentType<RendererProps> | null>(null);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<EarthStatus>('loading');
@@ -48,11 +68,11 @@ export default function EarthVisual({ className = '', compact = false }: { class
   useEffect(() => {
     setReady(false);
     setRenderer(null);
+    if (!animate) { setStatus(reduced ? 'reduced' : 'static'); return; }
     if (typeof matchMedia !== 'function' || typeof IntersectionObserver !== 'function' || typeof ResizeObserver !== 'function') {
       setStatus('unsupported'); return;
     }
-    // Try the actual renderer instead of relying on a constructor probe or click-to-play gate.
-    // The owner explicitly requested automatic Earth motion; other site animations retain their OS preference handling.
+    // Test the real renderer only after visibility and preference allow allocation.
     let active = true, near = false, mounted = false, failed = false;
     let loaded: ComponentType<RendererProps> | null = null;
     let loading: Promise<void> | null = null;
@@ -80,15 +100,21 @@ export default function EarthVisual({ className = '', compact = false }: { class
     return () => {
       active = false; failure.current = () => {}; observer.disconnect();
     };
-  }, []);
+  }, [animate, reduced]);
 
   return <div ref={container} className={`earth-visual ${compact ? 'earth-visual--compact' : ''} ${ready ? 'earth-visual--ready' : ''} ${className}`} data-earth-status={status} role="group" aria-label="Visualização da Terra">
     <div className="earth-ambient" aria-hidden="true" />
     <picture className="earth-static" aria-hidden="true">
-      <source media="(max-width: 1023px)" srcSet="/earth/earth-mobile.webp" />
-      <img src="/earth/earth-static.webp" width="1080" height="1080" alt="" decoding="async" fetchPriority={compact ? 'low' : 'high'} />
+      <source media="(max-width: 1023px)" srcSet="/earth/earth-cinematic-mobile.webp" />
+      <img src="/earth/earth-cinematic.webp" width="1080" height="1080" alt="" decoding="async" fetchPriority={compact ? 'low' : 'high'} />
     </picture>
     {Renderer && <Renderer onReady={() => { setReady(true); setStatus('running'); }} onFailure={reason => failure.current(reason)} />}
+    <div className="earth-preference">
+      <label>Globo <select aria-label="Movimento do globo" value={preference} onChange={event => choosePreference(event.target.value as EarthPreference)}>
+        <option value="auto">Automático</option><option value="animated">Animado</option><option value="static">Estático</option>
+      </select></label>
+      {reduced && <span>Movimento reduzido</span>}
+    </div>
     {debug && <EarthDiagnostics container={container} status={status} />}
   </div>;
 }

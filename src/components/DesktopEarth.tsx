@@ -32,24 +32,24 @@ const surfaceShader = `
     float daylight = smoothstep(-0.12, 0.38, sun);
     vec3 day = texture2D(dayMap, vUv).rgb;
     vec3 night = texture2D(nightMap, vUv).rgb;
-    float illumination = 0.35 + 0.65 * pow(max(sun, 0.0), 0.65);
+    float illumination = 0.40 + 0.78 * pow(max(sun, 0.0), 0.65);
     // The atlas contains blue terrain as well as lights. Only warm excess contributes emission.
     float warmLights = max(night.r - night.b * 0.82 - 0.008, 0.0);
-    float cityLights = pow(clamp(warmLights * 7.0, 0.0, 1.0), 0.62);
+    float cityLights = pow(clamp(warmLights * 8.5, 0.0, 1.0), 0.58);
     float nightSide = 1.0 - smoothstep(-0.12, 0.23, sun);
-    vec3 darkness = day * vec3(0.045, 0.075, 0.14);
+    vec3 darkness = day * vec3(0.055, 0.095, 0.19);
     vec3 color = mix(darkness, day * illumination, daylight);
-    color += vec3(2.2, 1.15, 0.27) * cityLights * nightSide;
+    color += vec3(2.7, 1.45, 0.36) * cityLights * nightSide;
     if (integratedClouds > 0.5) {
       float density = smoothstep(0.025, 0.88, texture2D(cloudMap, vec2(fract(vUv.x + cloudShift), vUv.y)).r);
-      vec3 cloudColor = vec3(0.86, 0.92, 1.0) * (0.055 + 0.95 * max(sun, 0.0));
+      vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
       color = mix(color, cloudColor, density * 0.76);
     }
     float ocean = smoothstep(0.0, 0.12, day.b - day.r);
     float specular = pow(max(dot(reflect(-sunDirection, normal), view), 0.0), 28.0);
     color += vec3(0.18, 0.31, 0.45) * specular * ocean * daylight * 0.3;
     float fresnel = pow(1.0 - max(dot(normal, view), 0.0), 3.0);
-    color += vec3(0.035, 0.19, 0.47) * fresnel * (0.45 + 0.55 * max(sun, 0.0));
+    color += vec3(0.045, 0.27, 0.62) * fresnel * (0.28 + 0.72 * max(sun, 0.0));
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
   }
@@ -63,7 +63,7 @@ const cloudsShader = `
     float sun = dot(normalize(vNormal), sunDirection);
     float amount = smoothstep(-0.12, 0.38, sun);
     float cloud = smoothstep(0.025, 0.88, texture2D(cloudMap, vUv).r);
-    vec3 cloudColor = vec3(0.86, 0.92, 1.0) * (0.055 + 0.95 * max(sun, 0.0));
+    vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
     gl_FragColor = vec4(cloudColor, cloud * (0.46 + 0.36 * amount));
     #include <colorspace_fragment>
   }
@@ -74,9 +74,11 @@ const atmosphereShader = `
   varying vec3 vPosition;
   void main() {
     vec3 view = normalize(cameraPosition - vPosition);
-    float rim = pow(1.0 - abs(dot(normalize(vNormal), view)), 4.0);
+    float rim = pow(1.0 - abs(dot(normalize(vNormal), view)), 4.5);
     float light = 0.28 + 0.72 * max(dot(normalize(vNormal), sunDirection), 0.0);
-    gl_FragColor = vec4(vec3(0.10, 0.37, 1.0), rim * light * 0.82);
+    float dayLimb = smoothstep(-0.18, 0.5, dot(normalize(vNormal), sunDirection));
+    vec3 atmosphereColor = mix(vec3(0.21, 0.13, 0.60), vec3(0.12, 0.63, 1.0), dayLimb);
+    gl_FragColor = vec4(atmosphereColor, rim * light * 0.95);
     #include <colorspace_fragment>
   }
 `;
