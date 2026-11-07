@@ -127,7 +127,7 @@ for (const [slug, name, offer, checkout] of catalog) {
     check(['sponsored', 'noopener', 'noreferrer'].every(token => link.relList.contains(token)), `${slug}: affiliate and security attributes`);
   }
   const media = $(dom, '.detail-media');
-  check(media && media.children.length === 0 && media.textContent.trim() === '', `${slug}: intentionally blank media`);
+  check(media?.querySelector('img')?.getAttribute('src') === `/images/products/${slug}.webp`, `${slug}: correct product artwork`);
   equal($(dom, '.detail-copy .eyebrow').textContent.trim(), slug === 'livego-pro' ? 'Ferramenta digital' : 'Treinamento digital', `${slug}: accurate product category`);
   for (const id of ['visao-geral', 'como-funciona', 'temas', 'para-quem', 'perguntas']) check($(dom, `#${id}`), `${slug}: ${id} section`);
   const faq = $(dom, '.faq-list details');
@@ -139,7 +139,7 @@ for (const [slug, name, offer, checkout] of catalog) {
   dom.window.close();
 }
 equal([...seenURLs].sort(), [...expectedURLs].sort(), 'Exactly all nine supplied unique affiliate URLs preserved');
-messages.push('Six dedicated product routes, exact affiliate URLs and attributes, blank media, categories, CTAs and FAQ controls');
+messages.push('Six dedicated product routes, exact affiliate URLs and attributes, correct artwork, categories, CTAs and FAQ controls');
 
 for (const [route, title] of [['/', 'Descubra ferramentas'], ['/produtos', 'Explore nossas'], ['/sobre', 'Sobre a'], ['/normas', 'Normas e'], ['/redes', 'Conecte-se']]) {
   const dom = await open(route);
@@ -160,8 +160,8 @@ messages.push('All 11 valid routes, shared navigation/footer, page metadata, Web
   equal($$(dom,'.product-card').map(card=>card.style.getPropertyValue('--reveal-delay-mobile')), ['0ms','50ms','100ms','0ms','50ms','100ms'], 'Mobile cards use short row-based stagger delays');
   equal($$(dom,'footer [data-reveal]').length,2,'Footer groups use progressive reveals');
   equal($$(dom, '.product-media').length, 6, 'Catalog reserves six media areas');
-  check($$(dom, '.product-media').every(media => media.children.length === 0 && !media.textContent.trim()), 'All product image containers remain empty');
-  check(!$(dom, '.product-card img'), 'No generated or placeholder product images');
+  check($$(dom, '.product-media').every(media => media.querySelector('img')), 'All six product covers are present');
+  equal(new Set($$(dom, '.product-card img').map(image => image.getAttribute('src'))).size, 6, 'Six distinct product covers');
   await type(dom, $(dom, '.catalog-toolbar input'), 'edicao');
   equal($$(dom, '.product-card h3').map(node => node.textContent), ['Edição Dinâmica com CapCut'], 'Search is accent insensitive');
   equal($(dom,'.product-card').dataset.revealState,'visible','Search results appear immediately without waiting for animation');

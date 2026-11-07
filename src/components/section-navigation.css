@@ -23,7 +23,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  background: linear-gradient(90deg, var(--accent), #9c88ed);
+  background: linear-gradient(90deg, var(--accent), #949494);
   opacity: 0;
   transform: scaleX(.7);
   transition: opacity 220ms ease, transform 280ms cubic-bezier(.22,1,.36,1);
