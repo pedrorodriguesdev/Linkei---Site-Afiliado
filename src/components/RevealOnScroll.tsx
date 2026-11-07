@@ -38,7 +38,7 @@ function observe(element: Element, callback: RevealEntry, threshold: number, roo
 /** Visible HTML first. Only offscreen content is armed; motion never gates interaction. */
 export default function RevealOnScroll({
   as: Tag = 'div', variant = 'fade-up', delay = 0, duration = 550,
-  mobileDelay, threshold = 0.1, rootMargin = '0px 0px 64px 0px', disabled = false,
+  mobileDelay, threshold = 0.1, rootMargin = '0px 0px -24px 0px', disabled = false,
   style, children, ...attributes
 }: Props) {
   const element = useRef<HTMLElement>(null);

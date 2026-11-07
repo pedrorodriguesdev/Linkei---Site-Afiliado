@@ -35,11 +35,13 @@ const surfaceShader = `
     float illumination = 0.40 + 0.78 * pow(max(sun, 0.0), 0.65);
     // The atlas contains blue terrain as well as lights. Only warm excess contributes emission.
     float warmLights = max(night.r - night.b * 0.82 - 0.008, 0.0);
-    float cityLights = pow(clamp(warmLights * 8.5, 0.0, 1.0), 0.58);
+    float cityLights = pow(clamp(warmLights * 7.5, 0.0, 1.0), 0.68);
     float nightSide = 1.0 - smoothstep(-0.12, 0.23, sun);
     vec3 darkness = day * vec3(0.055, 0.095, 0.19);
-    vec3 color = mix(darkness, day * illumination, daylight);
-    color += vec3(2.7, 1.45, 0.36) * cityLights * nightSide;
+    // Soft cloud shadow adds depth without another geometry or render pass.
+    float cloudShadow = texture2D(cloudMap, vec2(fract(vUv.x + cloudShift + 0.002), vUv.y)).r;
+    vec3 color = mix(darkness, day * illumination * (1.0 - cloudShadow * 0.13), daylight);
+    color += vec3(2.1, 1.28, 0.46) * cityLights * nightSide;
     if (integratedClouds > 0.5) {
       float density = smoothstep(0.025, 0.88, texture2D(cloudMap, vec2(fract(vUv.x + cloudShift), vUv.y)).r);
       vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
@@ -64,12 +66,13 @@ const cloudsShader = `
     float amount = smoothstep(-0.12, 0.38, sun);
     float cloud = smoothstep(0.025, 0.88, texture2D(cloudMap, vUv).r);
     vec3 cloudColor = vec3(0.92, 0.96, 1.0) * (0.075 + 1.02 * max(sun, 0.0));
-    gl_FragColor = vec4(cloudColor, cloud * (0.46 + 0.36 * amount));
+    gl_FragColor = vec4(cloudColor, cloud * (0.32 + 0.53 * amount));
     #include <colorspace_fragment>
   }
 `;
 const atmosphereShader = `
   uniform vec3 sunDirection;
+  uniform float pointerPresence;
   varying vec3 vNormal;
   varying vec3 vPosition;
   void main() {
@@ -77,8 +80,8 @@ const atmosphereShader = `
     float rim = pow(1.0 - abs(dot(normalize(vNormal), view)), 4.5);
     float light = 0.28 + 0.72 * max(dot(normalize(vNormal), sunDirection), 0.0);
     float dayLimb = smoothstep(-0.18, 0.5, dot(normalize(vNormal), sunDirection));
-    vec3 atmosphereColor = mix(vec3(0.21, 0.13, 0.60), vec3(0.12, 0.63, 1.0), dayLimb);
-    gl_FragColor = vec4(atmosphereColor, rim * light * 0.95);
+    vec3 atmosphereColor = mix(vec3(0.19, 0.22, 0.50), vec3(0.20, 0.57, 0.92), dayLimb);
+    gl_FragColor = vec4(atmosphereColor, rim * light * (0.78 + pointerPresence * 0.10));
     #include <colorspace_fragment>
   }
 `;
@@ -130,11 +133,12 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
     };
     const onContextLost = (event: Event) => { event.preventDefault(); fail('context'); };
     const baseTilt = 14 * Math.PI / 180;
+    let pointerPresence = 0;
     let pointerTilt = 0;
     let pointerLean = 0;
     let pointerBounds: DOMRect | null = null;
-    const resetPointer = () => { pointerTilt = 0; pointerLean = 0; pointerBounds = null; };
-    const enterPointer = () => { if (profile.pointer) pointerBounds = element.getBoundingClientRect(); };
+    const resetPointer = () => { pointerPresence = 0; pointerTilt = 0; pointerLean = 0; pointerBounds = null; };
+    const enterPointer = () => { if (profile.pointer) { pointerBounds = element.getBoundingClientRect(); pointerPresence = 1; } };
     const pointer = (event: PointerEvent) => {
       if (!profile.pointer || !inView || !pointerBounds || event.pointerType !== 'mouse') return;
       const x = (event.clientX - pointerBounds.left) / pointerBounds.width - 0.5;
@@ -155,7 +159,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
       element.appendChild(renderer.domElement);
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 20);
-      camera.position.z = 3.72;
+      camera.position.z = 3.68;
       const group = new THREE.Group();
       group.rotation.x = baseTilt;
       scene.add(group);
@@ -180,7 +184,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
         const geometry = new THREE.SphereGeometry(1, ...profile.segments); geometries.push(geometry);
         const surface = new THREE.ShaderMaterial({ vertexShader, fragmentShader: surfaceShader, uniforms: { dayMap: { value: day }, nightMap: { value: night }, cloudMap: { value: clouds }, integratedClouds: { value: 0 }, cloudShift: { value: 0 }, sunDirection: { value: sun } } });
         const cloudMaterial = new THREE.ShaderMaterial({ vertexShader, fragmentShader: cloudsShader, transparent: true, depthWrite: false, uniforms: { cloudMap: { value: clouds }, sunDirection: { value: sun } } });
-        const atmosphere = new THREE.ShaderMaterial({ vertexShader, fragmentShader: atmosphereShader, side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { sunDirection: { value: sun } } });
+        const atmosphere = new THREE.ShaderMaterial({ vertexShader, fragmentShader: atmosphereShader, side: THREE.BackSide, transparent: true, depthWrite: false, uniforms: { sunDirection: { value: sun }, pointerPresence: { value: 0 } } });
         materials.push(surface, cloudMaterial, atmosphere);
         globe.add(new THREE.Mesh(geometry, surface));
         const cloudMesh = new THREE.Mesh(geometry, cloudMaterial); cloudMesh.scale.setScalar(1.008); globe.add(cloudMesh);
@@ -203,6 +207,7 @@ export default function DesktopEarth({ onReady, onFailure }: Props) {
             const damping = 1 - Math.exp(-3.8 * deltaSeconds);
             group.rotation.x += (baseTilt + pointerTilt - group.rotation.x) * damping;
             group.rotation.z += (pointerLean - group.rotation.z) * damping;
+            atmosphere.uniforms.pointerPresence.value += (pointerPresence - atmosphere.uniforms.pointerPresence.value) * damping;
             cloudMesh.rotation.y += deltaSeconds * (Math.PI * 2 / 210 - EARTH_ANGULAR_VELOCITY);
             surface.uniforms.cloudShift.value = -cloudMesh.rotation.y / (Math.PI * 2);
             const renderStart = performance.now();

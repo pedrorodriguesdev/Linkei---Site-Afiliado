@@ -1,4 +1,4 @@
-/* V5 component finish. Theme values live in style.css; one responsive definition per component. */
+/* Cohesive component finish. Theme values live in style.css; one responsive definition per component. */
 .header-sentinel{position:absolute;top:0;left:0;width:1px;height:1px;pointer-events:none}
 .site-header{height:var(--site-header-height);transition:background-color 220ms,border-color 220ms,box-shadow 220ms}
 .site-header.is-scrolled{background:var(--header);border-bottom-color:var(--border-accent);box-shadow:0 5px 24px #00000012}
@@ -19,12 +19,12 @@
 .eyebrow{color:var(--body);background:var(--accent-tint);border-color:var(--border-accent);box-shadow:inset 0 1px 8px var(--accent-tint)}
 .eyebrow svg{color:var(--blue)}
 .home-hero{display:grid;grid-template-areas:'copy earth';grid-template-columns:55% 45%;min-height:570px;isolation:isolate}
-.home-hero:before{content:'';position:absolute;inset:0 0 -8%;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 80% 38%,var(--ambient-blue),transparent 53%),radial-gradient(ellipse at 93% 88%,var(--ambient-violet),transparent 42%)}
+.home-hero:before{content:none}
 .home-hero .hero-copy{grid-area:copy;min-width:0;padding:52px 0 44px}
 .home-hero h1{text-wrap:balance;line-height:1.12}
 .home-hero .hero-description{max-width:515px}
-.home-earth{grid-area:earth;isolation:isolate;margin:0 -12px 0 -8px;min-width:0;flex-direction:column;height:auto;aspect-ratio:1}
-.home-earth:before{inset:8% 0;background:radial-gradient(ellipse,var(--ambient-blue),transparent 66%)}
+.home-earth{grid-area:earth;isolation:isolate;margin:0 -18px 0 -16px;min-width:0;flex-direction:column;height:auto;aspect-ratio:1}
+.home-earth:before{content:none}
 .home-earth .earth-visual{width:100%;max-width:none}
 .earth-caption{position:static;font-size:8px;letter-spacing:.16em;margin-top:6px;color:var(--muted)}
 .benefits-strip{position:relative;padding-bottom:35px}
@@ -102,7 +102,7 @@
 .earth-credits>a:hover{text-decoration:underline}
 [data-theme=light] .product-card{background:radial-gradient(ellipse at 0 65%,var(--accent-tint),transparent 65%),var(--card-bg);border-color:var(--border-subtle);box-shadow:var(--shadow)}
 [data-theme=light] .product-media{background:transparent;border-color:transparent}
-[data-theme=light] .home-earth:before{background:radial-gradient(ellipse,var(--ambient-violet),transparent 67%)}
+
 [data-theme=light] .logo{color:var(--text-primary);text-shadow:0 2px 14px #8056ff14}
 @media(hover:hover) and (pointer:fine){.product-card:hover{transform:translateY(-4px);border-color:var(--border-accent);box-shadow:0 16px 32px var(--accent-tint)}.product-card:hover .card-link{border-color:var(--accent-violet)}}
 @media(max-width:1150px){.detail-hero{gap:22px}.detail-facts{padding:20px}.detail-section{padding:25px}.detail-copy h1{font-size:39px}.header-inner{gap:25px}.desktop-nav{gap:25px}}
@@ -168,3 +168,7 @@
 @media(max-width:430px){.home-hero .button-primary{flex-basis:100%}.home-hero .button-secondary{flex-basis:100%}.benefit{gap:7px}.benefit span{font-size:9px}}
 @media(max-width:359px){.product-card{grid-template-columns:33% minmax(0,1fr)}.product-card-content{padding:18px 12px 18px 10px}.product-card h3{font-size:19px}.product-card p{font-size:12px}.filter-button{padding-inline:10px;font-size:11px}.benefit>svg{display:none}.detail-section{padding:20px}}
 @media(prefers-reduced-motion:reduce){.mobile-nav,.faq-list details[open]>p{animation:none}.product-card:hover,.button:hover,.button:active,.card-link:active{transform:none}.button>svg,.card-link>svg{transform:none!important}}
+
+.page-enter{animation:elevon-page-in 320ms cubic-bezier(.22,1,.36,1) both}
+@keyframes elevon-page-in{from{opacity:.35;translate:0 6px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.page-enter{animation:none}}

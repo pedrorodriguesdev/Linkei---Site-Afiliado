@@ -263,9 +263,11 @@ for (const [label, options] of [
   const pointer = new w.Event('pointermove'); Object.assign(pointer, { pointerType: 'mouse', clientX: 490, clientY: 490 }); element.dispatchEvent(pointer);
   for (let index = 1; index <= 60; index++) dom.frames.step(1000000 + index * 1000 / 60);
   check(w.__tilt.rotation.z > 0 && w.__tilt.rotation.z < 0.013, 'Local pointer response is damped and limited');
+  check(w.__tilt.children[1].material.uniforms.pointerPresence.value > 0.9, 'Atmosphere responds gradually to desktop pointer presence');
   element.dispatchEvent(new w.Event('pointerleave'));
   for (let index = 61; index <= 240; index++) dom.frames.step(1000000 + index * 1000 / 60);
   check(Math.abs(w.__tilt.rotation.z) < 0.00001, 'Pointer leave smoothly resets orientation response');
+  check(w.__tilt.children[1].material.uniforms.pointerPresence.value < 0.0001, 'Atmosphere returns to rest after pointer leaves');
   equal(w.__failures, 0, 'Normal renderer lifecycle does not trigger fallback');
   await dom.finish();
   equal(dom.frames.pending.size, 0, 'Unmount cancels actual renderer RAF');

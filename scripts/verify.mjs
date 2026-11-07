@@ -157,7 +157,7 @@ messages.push('All 11 valid routes, shared navigation/footer, page metadata, Web
   equal($$(dom, '.product-card').length, 6, 'Catalog contains exactly six offers');
   check($(dom,'.catalog-experience'), 'Catalog keeps a continuous hero/storefront wrapper');
   equal($(dom,'#catalog-heading').textContent,'Encontre seu próximo passo.','Catalog discovery heading preserved');
-  equal($$(dom,'.product-card').map(card=>card.style.getPropertyValue('--reveal-delay-mobile')), ['0ms','50ms','100ms','0ms','50ms','100ms'], 'Mobile cards use short row-based stagger delays');
+  equal($$(dom,'.product-card').map(card=>card.style.getPropertyValue('--reveal-delay-mobile')), ['0ms','0ms','0ms','0ms','0ms','0ms'], 'Single-column mobile cards reveal without artificial waiting');
   equal($$(dom,'footer [data-reveal]').length,2,'Footer groups use progressive reveals');
   equal($$(dom, '.product-media').length, 6, 'Catalog reserves six media areas');
   check($$(dom, '.product-media').every(media => media.querySelector('img')), 'All six product covers are present');

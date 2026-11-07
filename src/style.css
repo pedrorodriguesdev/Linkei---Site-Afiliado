@@ -190,12 +190,11 @@ button,input{outline-offset:5px}
 .footer-bottom p{font-size:9px;color:var(--muted);margin:0}
 .footer-bottom a{display:flex;align-items:center;gap:6px}
 .page-shell{padding-bottom:65px}
-.page-hero{min-height:370px;display:flex;align-items:center;position:relative;overflow:hidden;padding:45px 0;margin-bottom:18px}
-.page-hero>.hero-copy{width:60%;padding-block:5px}
+.page-hero{min-height:370px;display:flex;align-items:center;position:relative;padding:36px 0 42px;margin-bottom:18px;gap:32px}
+.page-hero>.hero-copy{flex:1;min-width:0;padding-block:5px}
 .page-hero h1{font-size:58px;line-height:1.08;margin:22px 0 18px;letter-spacing:-.045em}
 .page-intro{font-size:15px;line-height:1.7;max-width:610px;margin-bottom:21px}
-.page-earth{position:absolute!important;width:430px!important;height:430px!important;right:0;top:-12px;opacity:.9}
-.page-earth.earth-visual--compact{width:430px!important}
+.page-earth{position:relative;width:min(43%,470px);height:auto;flex:none;aspect-ratio:1;opacity:1;margin:0 0 18px}
 .catalog-hero{margin-bottom:0;min-height:350px}
 .catalog-hero>.hero-copy{width:65%}
 .catalog-hero h1{font-size:52px}
@@ -351,7 +350,7 @@ button,input{outline-offset:5px}
 .explore-banner h2{font-size:23px}
 .explore-banner .button{font-size:11px}
 .page-hero h1{font-size:51px}
-.page-earth{right:-55px}
+
 .social-card{padding:23px}
 .social-brand h2{font-size:23px}
 .social-brand{gap:10px}
@@ -399,8 +398,8 @@ button,input{outline-offset:5px}
 .footer-bottom{flex-wrap:wrap}
 .footer-bottom p{order:3;flex-basis:100%}
 .page-hero h1{font-size:45px}
-.page-hero>.hero-copy{width:66%}
-.page-earth{right:-95px;opacity:.65}
+.page-hero>.hero-copy{min-width:0}
+.page-earth{width:40%}
 .page-intro{font-size:13px}
 .info-card{padding:25px}
 .info-card h2{font-size:24px}
@@ -514,7 +513,7 @@ button,input{outline-offset:5px}
 .page-hero h1{font-size:41px;margin-block:18px 16px;line-height:1.1}
 .page-intro{font-size:13px;margin-bottom:17px;max-width:460px}
 .page-hero .text-link{font-size:11px}
-.page-earth,.page-earth.earth-visual--compact{position:relative!important;width:250px!important;height:250px!important;top:auto;right:auto;margin:5px auto -2px;opacity:1;align-self:center}
+.page-earth,.page-earth.earth-visual--compact{width:clamp(240px,65vw,310px);height:auto;margin:4px auto 20px;align-self:center}
 .catalog-hero{padding-top:30px;margin-bottom:0}
 .catalog-hero h1{font-size:39px}
 .catalog-hero>.hero-copy{width:100%}
