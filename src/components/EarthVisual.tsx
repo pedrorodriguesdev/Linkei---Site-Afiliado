@@ -37,10 +37,11 @@ function EarthDiagnostics({ container, status }: { container: RefObject<HTMLDivE
   return <aside className="earth-diagnostics" aria-label="Diagnóstico da animação"><strong>Diagnóstico do globo</strong><pre>{`Estado: ${status}\n${explanations[status]}\n${report}`}</pre></aside>;
 }
 
-type EarthPreference = 'auto' | 'animated' | 'static';
+type EarthPreference = 'animated' | 'static';
 function storedPreference(): EarthPreference {
-  try { const saved = localStorage.getItem('elevon-earth'); return saved === 'static' || saved === 'animated' ? saved : 'auto'; }
-  catch { return 'auto'; }
+  // Only a saved, explicit opt-in enables animation; legacy auto is now static.
+  try { return localStorage.getItem('elevon-earth') === 'animated' ? 'animated' : 'static'; }
+  catch { return 'static'; }
 }
 /** Visibility-gated renderer. Static and reduced-motion modes allocate no GPU resources. */
 export default function EarthVisual({ className = '', compact = false }: { className?: string; compact?: boolean }) {
@@ -58,7 +59,7 @@ export default function EarthVisual({ className = '', compact = false }: { class
     setPreference(value);
     try { localStorage.setItem('elevon-earth', value); } catch { /* Private browsing remains usable. */ }
   };
-  const animate = preference !== 'static' && !reduced;
+  const animate = preference === 'animated' && !reduced;
   const [Renderer, setRenderer] = useState<ComponentType<RendererProps> | null>(null);
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState<EarthStatus>('loading');
@@ -111,7 +112,7 @@ export default function EarthVisual({ className = '', compact = false }: { class
     {Renderer && <Renderer onReady={() => { setReady(true); setStatus('running'); }} onFailure={reason => failure.current(reason)} />}
     <div className="earth-preference">
       <label>Globo <select aria-label="Movimento do globo" value={preference} onChange={event => choosePreference(event.target.value as EarthPreference)}>
-        <option value="auto">Automático</option><option value="animated">Animado</option><option value="static">Estático</option>
+        <option value="static">Estático</option><option value="animated">Animado</option>
       </select></label>
       {reduced && <span>Movimento reduzido</span>}
     </div>

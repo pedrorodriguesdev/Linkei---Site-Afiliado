@@ -2,6 +2,8 @@
 
 Plataforma de descoberta e indicação de seis produtos digitais, em português brasileiro.
 
+O globo inicia **estático por padrão**. O visitante pode escolher **Animado** no seletor; essa escolha explícita fica salva para as próximas visitas. O antigo modo automático, preferências inválidas e armazenamento indisponível usam a imagem estática; movimento reduzido continua pausando a animação.
+
 ## Desenvolvimento
 
 Requisitos: Node.js 22+ e npm.

@@ -134,7 +134,8 @@ async function open(script, options = {}) {
   virtualConsole.on('error', (...args) => errors.push(args.map(String).join(' ')));
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: options.debug ? 'https://earth.test/?globeDebug=1' : 'https://earth.test', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const w = dom.window;
-  if(options.preference)w.localStorage.setItem('elevon-earth',options.preference);
+  if(options.preference !== undefined)w.localStorage.setItem('elevon-earth',options.preference);
+  if(options.storageBlocked)Object.defineProperty(w,'localStorage',{get(){throw new w.DOMException('Storage unavailable','SecurityError')}});
   Object.defineProperty(w.performance, 'now', { value: () => w.__perfTime });
   Object.defineProperty(w, 'devicePixelRatio', { value: 3, configurable: true });
   Object.assign(w, { __imports: 0, __mounts: 0, __unmounts: 0, __ready: 0, __failures: 0, __allocations: 0, __renderCount: 0,
@@ -192,7 +193,7 @@ async function open(script, options = {}) {
 for (const [label, options] of [
   ['missing observer API', { noObserver: true }],
 ]) {
-  const dom = await open(gateScript, options);
+  const dom = await open(gateScript, {preference:'animated',...options});
   dom.emit(true); await tick();
   equal(dom.window.__imports, 0, `${label}: renderer is never imported`);
   check(dom.window.document.querySelector('.earth-static img'), `${label}: static fallback remains present`);
@@ -206,7 +207,7 @@ for (const [label, options] of [
   ['data saver', {width:390,connection:{saveData:true}}], ['3g mobile', {width:390,connection:{effectiveType:'3g'}}],
   ['slow downlink', {connection:{downlink:0.8}}], ['high latency', {connection:{rtt:800}}],
 ]) {
-  const dom = await open(gateScript, options); const w = dom.window;
+  const dom = await open(gateScript, {preference:'animated',...options}); const w = dom.window;
   equal(w.__imports, 0, `${label}: lazy load waits for visibility`);
   dom.emit(true); await eventually(() => w.__mounts === 1, `${label}: animated renderer did not mount`);
   equal(w.__imports, 1, `${label}: animated renderer loads once`);
@@ -216,7 +217,7 @@ for (const [label, options] of [
   await dom.finish();
 }
 {
-  const dom = await open(gateScript, {width:1440}); const w = dom.window;
+  const dom = await open(gateScript, {preference:'animated',width:1440}); const w = dom.window;
   dom.emit(true); await eventually(() => w.__mounts === 1, 'Initial renderer did not mount');
   dom.narrow(true); await tick();
   equal(w.__mounts, 1, 'Resizing to mobile retains the single mounted renderer');
@@ -236,7 +237,7 @@ for (const [label, options] of [
   check(dom.observers.every(observer => observer.targets.size === 0), 'Lazy-load observations disconnected');
 }
 {
-  const dom = await open(gateScript); const w = dom.window;
+  const dom = await open(gateScript,{preference:'animated'}); const w = dom.window;
   dom.emit(true); dom.emit(false); await tick(); await tick();
   equal(w.__mounts,0,'Lazy import resolving after Earth leaves viewport does not allocate an invisible renderer');
   dom.emit(true); await eventually(()=>w.__mounts===1,'Cached import starts automatically when Earth becomes visible');
@@ -356,7 +357,7 @@ for(const [width,options] of [[390,{finePointer:false}],[768,{finePointer:false}
 }
 
 for (const renderCost of [1,200]) {
- const dom=await open(integratedScript,{width:390,finePointer:false,renderCost});const w=dom.window;
+ const dom=await open(integratedScript,{preference:'animated',width:390,finePointer:false,renderCost});const w=dom.window;
  dom.emit(true);await eventually(()=>w.__allocations===1,'Mobile integration lazy allocation');
  await eventually(()=>dom.observers.length>=2,'Mobile integration renderer observer');dom.emit(true);dom.frames.step(0);await tick();
  check(w.document.querySelector('.earth-visual--ready'),'Integrated mobile globe reveals a valid animated canvas');
@@ -384,16 +385,16 @@ for (const renderCost of [1,200]) {
 }
 
 {
- const dom=await open(integratedScript,{width:1440,debug:true});const w=dom.window;
- dom.emit(true);await eventually(()=>w.__allocations===1,'Earth starts automatically without clicking');
+ const dom=await open(integratedScript,{preference:'animated',width:1440,debug:true});const w=dom.window;
+ dom.emit(true);await eventually(()=>w.__allocations===1,'Saved animated preference starts Earth without another click');
  await eventually(()=>dom.observers.length>=2,'Automatic renderer observer');dom.emit(true);dom.frames.step(0);await tick();
- equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Automatic startup reaches a valid running frame');
+ equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'running','Restored animated preference reaches a valid running frame');
  equal(w.document.querySelectorAll('.earth-visual button').length,0,'Visitors never need a start or pause button');
  const host=w.document.querySelector('.earth-canvas');equal(host.dataset.earthState,'running','Renderer reports actual running state');
  equal(host.dataset.earthFrames,'1','Diagnostic counter starts on valid GPU draw');
  const before=w.__globe.rotation.y;
  for(let index=1;index<=21600;index++)dom.frames.step(index*1000/60);
- closeTo(w.__globe.rotation.y-before,Math.PI*4,'Automatic rotation continues for two complete turns without any user event');
+ closeTo(w.__globe.rotation.y-before,Math.PI*4,'Opted-in rotation continues for two complete turns without any further user event');
  equal(dom.frames.pending.size,1,'Continuous rotation retains one RAF');
  equal(w.__allocations,1,'Continuous rotation retains the original renderer');
  equal(w.__failures,0,'Healthy automatic rotation never enters a stopped state');
@@ -406,7 +407,7 @@ for (const renderCost of [1,200]) {
  await dom.finish();equal(dom.frames.pending.size,0,'Page disposal still releases automatic RAF');
 }
 {
- const dom=await open(integratedScript,{width:1440,shaderFailure:true,debug:true});const w=dom.window;
+ const dom=await open(integratedScript,{preference:'animated',width:1440,shaderFailure:true,debug:true});const w=dom.window;
  dom.emit(true);await eventually(()=>w.__allocations===1,'Failure diagnostic allocation');
  await eventually(()=>dom.observers.length>=2,'Failure diagnostic observer');dom.emit(true);dom.frames.step(0);await tick();
  equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'shader','Shader failures retain a distinct observable reason');
@@ -415,30 +416,76 @@ for (const renderCost of [1,200]) {
  check(!w.document.querySelector('canvas'),'Failed shader canvas is removed');await dom.finish();
 }
 
-for (const options of [{preference:'static'},{reducedMotion:true},{preference:'animated',reducedMotion:true}]) {
+// A first visit and every value other than an explicit opt-in stay static.
+// Exercise both the lazy boundary (import count) and the real renderer boundary
+// (allocations, texture requests and RAFs) to avoid proving only a label change.
+for (const [label, options] of [
+ ['first visit',{}], ['saved static',{preference:'static'}],
+ ['legacy automatic',{preference:'auto'}], ['invalid saved value',{preference:'unexpected'}],
+ ['empty saved value',{preference:''}], ['blocked storage',{storageBlocked:true}],
+]) {
+ for (const script of [gateScript,integratedScript]) {
+  const dom=await open(script,options);const w=dom.window;dom.emit(true);await tick();
+  equal(w.document.querySelector('select[aria-label="Movimento do globo"]').value,'static',`${label}: static is selected`);
+  equal([...w.document.querySelectorAll('.earth-preference option')].map(option=>option.value),['static','animated'],`${label}: only static and animated choices are offered`);
+  equal(w.document.querySelector('.earth-visual').dataset.earthStatus,'static',`${label}: static state is reported`);
+  equal(w.__imports,0,`${label}: animated module is not imported`);
+  equal(w.__allocations,0,`${label}: no WebGL renderer is allocated`);
+  equal(w.__textureURLs.length,0,`${label}: no animated textures are requested`);
+  equal(dom.frames.pending.size,0,`${label}: no RAF is scheduled`);
+  check(!w.document.querySelector('canvas,.test-desktop'),`${label}: animated renderer is not mounted`);
+  check(w.document.querySelector('.earth-static img'),`${label}: static Earth remains visible`);
+  await dom.finish();
+ }
+}
+for (const options of [{reducedMotion:true},{preference:'animated',reducedMotion:true}]) {
  const dom=await open(integratedScript,options);dom.emit(true);await tick();
- equal(dom.window.__allocations,0,'Static/reduced motion allocates no renderer');
- equal(dom.frames.pending.size,0,'Static/reduced motion has no animation loop');
- check(dom.window.document.querySelector('.earth-static img'),'Static fallback remains visible');
+ equal(dom.window.__allocations,0,'Reduced motion allocates no renderer, including after saved opt-in');
+ equal(dom.frames.pending.size,0,'Reduced motion has no animation loop');
+ check(dom.window.document.querySelector('.earth-static img'),'Reduced-motion fallback remains visible');
  await dom.finish();
 }
 {
  const dom=await open(integratedScript);const w=dom.window;
- dom.emit(true);await eventually(()=>w.__allocations===1,'Preference test starts renderer');
- await eventually(()=>dom.observers.length>=2,'Preference test renderer observer');dom.emit(true);dom.frames.step(0);await tick();
  const select=w.document.querySelector('select[aria-label="Movimento do globo"]');
- select.value='static';select.dispatchEvent(new w.Event('change',{bubbles:true}));
- await eventually(()=>w.__disposed.renderer===1,'Selecting static disposes GPU resources');
- equal(w.localStorage.getItem('elevon-earth'),'static','Static choice persists');
- equal(dom.frames.pending.size,0,'Static selection cancels frame loop');
+ equal(select.value,'static','Preference interaction starts static for a new visitor');
  select.value='animated';select.dispatchEvent(new w.Event('change',{bubbles:true}));await tick();dom.emit(true);
- await eventually(()=>w.__allocations===2,'Animated selection resumes renderer');
- equal(w.localStorage.getItem('elevon-earth'),'animated','Animated choice persists');
+ await eventually(()=>w.__allocations===1,'Selecting animated starts the renderer');
+ await eventually(()=>dom.observers.length>=2,'Selected animation renderer observer');dom.emit(true);dom.frames.step(0);await tick();
+ check(w.document.querySelector('.earth-visual--ready'),'Explicit animation selection renders successfully');
+ const savedAnimated=w.localStorage.getItem('elevon-earth');
+ equal(savedAnimated,'animated','Explicit animated choice is saved');
+ await dom.finish();equal(dom.frames.pending.size,0,'Leaving the page releases opted-in animation');
+
+ const restored=await open(integratedScript,{preference:savedAnimated});const rw=restored.window;
+ equal(rw.document.querySelector('select').value,'animated','Reload restores the explicit animated choice');
+ restored.emit(true);await eventually(()=>rw.__allocations===1,'Reload restarts the opted-in renderer');
+ await eventually(()=>restored.observers.length>=2,'Restored animation renderer observer');restored.emit(true);restored.frames.step(0);await tick();
+ const restoredSelect=rw.document.querySelector('select');
+ restoredSelect.value='static';restoredSelect.dispatchEvent(new rw.Event('change',{bubbles:true}));
+ await eventually(()=>rw.__disposed.renderer===1,'Selecting static releases the active renderer');
+ equal(restored.frames.pending.size,0,'Static selection cancels the frame loop');
+ const savedStatic=rw.localStorage.getItem('elevon-earth');
+ equal(savedStatic,'static','Explicit static choice is saved');
+ await restored.finish();
+
+ const staticReload=await open(integratedScript,{preference:savedStatic});staticReload.emit(true);await tick();
+ equal(staticReload.window.document.querySelector('select').value,'static','Reload restores the explicit static choice');
+ equal(staticReload.window.__allocations,0,'Reload of static choice allocates no renderer');
+ equal(staticReload.frames.pending.size,0,'Reload of static choice schedules no animation');
+ await staticReload.finish();
+}
+{
+ const dom=await open(integratedScript,{storageBlocked:true});const w=dom.window;
+ const select=w.document.querySelector('select');
+ select.value='animated';select.dispatchEvent(new w.Event('change',{bubbles:true}));await tick();dom.emit(true);
+ await eventually(()=>w.__allocations===1,'Explicit animation still works when preference storage is blocked');
+ equal(select.value,'animated','Blocked storage does not undo the current visitor choice');
  await dom.finish();
 }
 
 console.log(`PASS: ${assertions} Earth assertions. Actual React gate, production clock and renderer lifecycle tested with DOM/Three mocks.`);
-console.log('  ✓ Automatic renderer on mobile, tablet and desktop; static and reduced-motion preferences');
+console.log('  ✓ Static by default, explicit animation opt-in and reload persistence; reduced motion and blocked storage');
 console.log('  ✓ Same rotation speed at different draw targets, one RAF, pause/resume, mobile textures and no mobile pointer tracking');
 console.log('  ✓ Measured quality adaptation with hysteresis, renderer reuse, error recovery and resource disposal');
 console.log('LIMIT: No browser/GPU renderer available; real WebGL shader compilation, visual smoothness and frame rate are not measured.');
