@@ -1,0 +1,59 @@
+/* Three distinct compositions on the reference's lavender stage; no extra WebGL. */
+.page-hero.internal-page-hero{
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);align-items:center;
+ min-height:390px;gap:12px;padding:26px max(56px,calc((100% - 1280px)/2)) 34px;margin-bottom:28px;isolation:isolate;
+}
+.page-hero.internal-page-hero::before{
+ content:'';position:absolute;z-index:-2;pointer-events:none;inset:0;
+ background:radial-gradient(ellipse at 74% 47%,var(--hero-lavender),transparent 65%),linear-gradient(115deg,var(--hero-start),var(--hero-end));
+ border-bottom:1px solid var(--border-subtle);
+}
+.page-hero.internal-page-hero::after{
+ content:'';position:absolute;z-index:-1;pointer-events:none;inset:0;
+ background:radial-gradient(ellipse 82% 145% at 112% -70%,transparent 78%,var(--hero-wave-border) 78.2%,var(--hero-wave) 78.5%,transparent 100%);
+}
+.page-hero.internal-page-hero>.hero-copy{position:relative;z-index:1;min-width:0;padding-block:14px;}
+.page-hero.internal-page-hero h1{font-size:clamp(40px,3.9vw,58px);line-height:1.05;letter-spacing:-.05em;margin:18px 0 18px;text-wrap:balance;}
+.page-hero.internal-page-hero .page-intro{max-width:550px;font-size:15px;line-height:1.65;margin-bottom:22px;}
+.page-hero.internal-page-hero .eyebrow{font-size:10px;font-weight:600;letter-spacing:.015em;gap:8px;padding:7px 12px;}
+.internal-page-hero .internal-hero-action{padding:12px 18px;font-size:12px;min-height:44px;gap:12px;}
+.internal-page-art{position:relative;min-width:0;align-self:center;aspect-ratio:3/2;width:112%;margin-left:-12%;pointer-events:none;user-select:none;}
+.internal-page-art::before{content:'';position:absolute;inset:11% 12% 4%;z-index:-1;background:radial-gradient(ellipse,var(--hero-art-glow),transparent 68%);}
+.internal-page-art picture,.internal-page-art img{display:block;width:100%;height:100%;}
+.internal-page-art img{object-fit:contain;}
+.social-card{transition:transform 220ms var(--motion-ease),box-shadow 220ms,border-color 220ms;}
+.social-card:focus-within{border-color:var(--accent-violet);box-shadow:var(--glow-shadow);}
+.social-card a:active{transform:translateY(1px);}
+@media(min-width:768px) and (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+ .internal-page-art img{animation:elevon-art-float 7s ease-in-out infinite;}
+ .internal-page-hero--normas .internal-page-art img{animation-duration:8s;}
+ .internal-page-hero--redes .internal-page-art img{animation-duration:9s;}
+ .social-card:hover{transform:translateY(-4px);box-shadow:var(--shadow),var(--glow-shadow);border-color:var(--accent-violet);}
+}
+@keyframes elevon-art-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media(max-width:1150px){
+ .page-hero.internal-page-hero{min-height:350px;gap:8px;padding-inline:32px;}
+ .page-hero.internal-page-hero h1{font-size:clamp(36px,4.2vw,48px);}
+ .page-hero.internal-page-hero .page-intro{font-size:14px;}
+}
+@media(min-width:768px) and (max-width:900px){
+ .page-hero.internal-page-hero{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);}
+ .internal-page-art{width:110%;margin-left:-10%;}
+ .page-hero.internal-page-hero h1{font-size:38px;}
+}
+@media(max-width:767px){
+ .page-hero.internal-page-hero{display:flex;flex-direction:column;align-items:stretch;gap:0;min-height:0;padding:29px 20px 9px;margin-bottom:25px;}
+ .page-hero.internal-page-hero::before{background:radial-gradient(ellipse at 65% 75%,var(--hero-lavender),transparent 75%),linear-gradient(150deg,var(--hero-start),var(--hero-end));}
+ .page-hero.internal-page-hero::after{opacity:.65;background:radial-gradient(ellipse 115% 140% at 112% -10%,transparent 78%,var(--hero-wave-border) 78.2%,var(--hero-wave) 78.5%,transparent 100%);}
+ .page-hero.internal-page-hero>.hero-copy{width:100%;padding:0;}
+ .page-hero.internal-page-hero h1{font-size:clamp(35px,8.6vw,46px);line-height:1.08;margin:17px 0 15px;text-wrap:pretty;}
+ .page-hero.internal-page-hero .page-intro{font-size:14px;max-width:540px;margin-bottom:17px;}
+ .page-hero.internal-page-hero .eyebrow{font-size:9px;}
+ .internal-page-hero .internal-hero-action{min-height:44px;font-size:11px;}
+ .internal-page-art{width:min(100%,390px);height:auto;margin:2px auto 0;align-self:center;aspect-ratio:3/2;}
+}
+@media(max-width:359px){.page-hero.internal-page-hero{padding-inline:16px;}}
+@media(prefers-reduced-motion:reduce){
+ .internal-page-art img{animation:none;transform:none;}
+ .social-card{transition:none;}
+}

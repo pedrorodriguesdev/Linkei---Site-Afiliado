@@ -1,8 +1,28 @@
 @font-face{font-family:Inter;src:url('/fonts/inter-latin.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 
-/* Theme tokens are shared by every route and component. */
+/* Light is the base identity; only explicit visitor choices enable dark mode. */
 :root {
  font-family:Inter,Arial,sans-serif;color:var(--text);background:var(--bg);font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;
+ --background:#f8f9ff;--background-deep:#eee9ff;--background-secondary:#f2f0ff;
+ --surface-primary:#fff;--surface-secondary:#f9f7ff;--surface-highlight:#eee9ff;
+ --text-primary:#19172f;--text-secondary:#5f6685;--text-muted:#68708e;
+ --border-subtle:#dcd4fa;--border-accent:#b7a1f2;
+ --accent-blue:#4d78f4;--accent-cyan:#2778ba;--accent-violet:#7147e8;--accent-purple:#9654ed;
+ --accent-gradient:linear-gradient(110deg,#4c78ed 0%,#7651ea 52%,#a459e8 100%);
+ --heading-gradient:linear-gradient(110deg,#3d5ddb,#653bd3 52%,#8736bd 100%);
+ --button-gradient:linear-gradient(110deg,#5843d8,#783bd4);
+ --ambient-blue:rgba(94,147,250,.12);--ambient-violet:rgba(155,108,238,.13);
+ --accent-tint:rgba(128,86,255,.055);--card-bg:#fff;
+ --header:rgba(248,249,255,.96);--shadow:0 8px 28px #5542a410;--glow-shadow:0 6px 22px #6845ea20;
+ --bg:var(--background);--secondary:var(--background-secondary);--surface:var(--surface-primary);--surface2:var(--surface-secondary);
+ --text:var(--text-primary);--body:var(--text-secondary);--muted:var(--text-muted);--border:var(--border-subtle);--blue:#6740ce;--accent:var(--accent-blue);
+ --site-header-height:76px;--motion-ease:cubic-bezier(.22,1,.36,1);--section-light:var(--accent-tint);
+ --hero-lavender:rgba(166,137,244,.30);--hero-start:rgba(255,255,255,.45);--hero-end:#e9e3ff;
+ --hero-wave-border:#ffffffb0;--hero-wave:#cbbdfa55;--hero-art-glow:#b3a0f03d;
+ color-scheme:light;
+}
+
+[data-theme=dark] {
  --background:#060916;--background-deep:#030611;--background-secondary:#0b1125;
  --surface-primary:#10182d;--surface-secondary:#151f38;--surface-highlight:#1b2850;
  --text-primary:#f8faff;--text-secondary:#b2bfda;--text-muted:#91a0bf;
@@ -12,27 +32,11 @@
  --heading-gradient:linear-gradient(110deg,#62b5ff,#8891ff 48%,#b87aff);
  --button-gradient:linear-gradient(110deg,#405ee3,#7541da);
  --ambient-blue:rgba(49,82,195,.24);--ambient-violet:rgba(119,63,232,.14);
- --accent-tint:rgba(128,86,255,.09);--card-bg:#0e1529;
+ --accent-tint:rgba(128,86,255,.09);--card-bg:#0e1529;--blue:#9caeff;
  --header:rgba(6,9,22,.94);--shadow:0 12px 36px #0002;--glow-shadow:0 6px 22px #6845ea24;
- --bg:var(--background);--secondary:var(--background-secondary);--surface:var(--surface-primary);--surface2:var(--surface-secondary);
- --text:var(--text-primary);--body:var(--text-secondary);--muted:var(--text-muted);--border:var(--border-subtle);--blue:#9caeff;--accent:var(--accent-blue);
- --site-header-height:83px;--motion-ease:cubic-bezier(.22,1,.36,1);--section-light:var(--accent-tint);
+ --hero-lavender:rgba(105,70,210,.24);--hero-start:rgba(11,17,37,.45);--hero-end:#12152e;
+ --hero-wave-border:#9b89ee20;--hero-wave:#6c4bb51a;--hero-art-glow:#6b45bc24;
  color-scheme:dark;
-}
-
-[data-theme=light] {
- --background:#f8f9ff;--background-deep:#f2ecff;--background-secondary:#f0f1ff;
- --surface-primary:#fff;--surface-secondary:#f8f6ff;--surface-highlight:#ede7ff;
- --text-primary:#17172b;--text-secondary:#525a76;--text-muted:#66708b;
- --border-subtle:#e0ddf1;--border-accent:#b8a4f6;
- --accent-blue:#456de8;--accent-cyan:#2778ba;--accent-violet:#7650ed;--accent-purple:#9650e9;
- --accent-gradient:linear-gradient(110deg,#5278f2,#845af0 55%,#a666f0);
- --heading-gradient:linear-gradient(110deg,#345aca,#6637c7 55%,#8538b9);
- --button-gradient:linear-gradient(110deg,#5544d4,#793bcc);
- --ambient-blue:rgba(94,147,250,.15);--ambient-violet:rgba(155,108,238,.13);
- --accent-tint:rgba(128,86,255,.055);--card-bg:#fff;--blue:#6843c5;
- --header:rgba(248,249,255,.96);--shadow:0 8px 28px #5542a410;--glow-shadow:0 6px 22px #6845ea20;
- color-scheme:light;
 }
 
 *{box-sizing:border-box}

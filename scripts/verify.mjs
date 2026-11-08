@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -40,7 +40,10 @@ async function open(route, theme = null, options = {}) {
     if (!mediaQueries.has(query)) {
       const listeners = new Set();
       mediaQueries.set(query, {
-        matches: query.includes('prefers-reduced-motion') ? Boolean(options.reducedMotion) : query.includes('min-width') ? false : query.includes('max-width') ? true : false,
+        matches: query.includes('prefers-reduced-motion') ? Boolean(options.reducedMotion)
+          : query.includes('prefers-color-scheme') ? Boolean(options.osDark)
+          : query.includes('min-width') ? (options.width ?? 390) >= Number(query.match(/min-width:\s*(\d+)/)?.[1] ?? Infinity)
+          : query.includes('max-width') ? (options.width ?? 390) <= Number(query.match(/max-width:\s*(\d+)/)?.[1] ?? 0) : false,
         media: query, onchange: null,
         addEventListener(_event, listener) { listeners.add(listener); },
         removeEventListener(_event, listener) { listeners.delete(listener); },
@@ -75,9 +78,12 @@ async function open(route, theme = null, options = {}) {
   window.HTMLElement.prototype.scrollIntoView = function (settings) { dom.scrollCalls.push({ id: this.id, settings }); };
   window.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
-  if (theme) window.localStorage.setItem('elevon-theme', theme);
+  if (theme !== null) window.localStorage.setItem('elevon-theme', theme);
+  if (options.storageBlocked) Object.defineProperty(window, 'localStorage', { get() { throw new window.DOMException('Storage unavailable', 'SecurityError'); } });
   const initial = [...window.document.querySelectorAll('script')].find(element => !element.src)?.textContent;
   if (initial) window.eval(initial);
+  dom.themeBeforeMount = window.document.documentElement.dataset.theme;
+  dom.themeColorBeforeMount = window.document.querySelector('meta[name="theme-color"]')?.content;
   window.eval(script);
   await eventually(() => window.document.querySelector('h1'), `Route ${route} did not render`);
   await tick();
@@ -152,6 +158,86 @@ for (const [route, title] of [['/', 'Descubra ferramentas'], ['/produtos', 'Expl
 }
 messages.push('All 11 valid routes, shared navigation/footer, page metadata, WebGL-unavailable fallback and official social links');
 
+// These are client DOM checks, not a claim of layout validation at these widths.
+// The same accessible content and distinct responsive artwork must exist at each breakpoint.
+const heroSources = new Map();
+for (const width of [360, 390, 430, 768, 1024, 1440]) {
+  for (const theme of ['light', 'dark']) {
+    for (const route of ['/sobre', '/normas', '/redes']) {
+      const dom = await open(route, theme, { width });
+      const hero = $(dom, '.internal-page-hero');
+      check(hero, `${width}px/${theme}${route}: internal hero remains available`);
+      equal($$(dom, '.earth-visual').length, 0, `${width}px/${theme}${route}: no repeated globe`);
+      const image = hero.querySelector('.internal-page-art img');
+      check(image, `${width}px/${theme}${route}: page illustration exists`);
+      equal(image.getAttribute('alt'), '', `${width}px/${theme}${route}: artwork is decorative`);
+      check(image.width > 0 && image.height > 0, `${width}px/${theme}${route}: intrinsic dimensions reserve space`);
+      check(image.closest('[aria-hidden="true"]'), `${width}px/${theme}${route}: visual art does not duplicate accessible copy`);
+      check(!image.closest('a,button'), `${width}px/${theme}${route}: decorative art is not a fake control`);
+      const responsiveSource = hero.querySelector('picture source[media]');
+      check(responsiveSource?.getAttribute('srcset'), `${width}px/${theme}${route}: mobile source is supplied`);
+      const source = image.getAttribute('src');
+      if (heroSources.has(route)) equal(source, heroSources.get(route), `${width}px/${theme}${route}: shared artwork supports both themes`);
+      else {
+        heroSources.set(route, source);
+        for (const asset of [source, responsiveSource.getAttribute('srcset')]) {
+          check(asset.startsWith('/images/heroes/') && asset.endsWith('.webp'), `${route}: optimized local artwork`);
+          check((await stat(path.join(project, 'public', asset))).size > 0, `${route}: referenced illustration exists on disk`);
+        }
+      }
+      if (route === '/sobre') check($(dom, '.internal-page-hero a[href="#nossa-proposta"]') && $(dom, '#nossa-proposta'), 'About hero CTA reaches preserved proposal content');
+      if (route === '/normas') check($(dom, '.policy-grid') && $$(dom, '.policy-card').length === 4, 'Normas preserves four transparency cards');
+      if (route === '/redes') equal($$(dom, '.social-card a').map(link => link.href), ['https://www.instagram.com/elevon.n/', 'https://www.tiktok.com/@llooping0', 'https://x.com/LinkouDigital'], 'Redes retains functional profiles below decorative art');
+      dom.window.close();
+    }
+  }
+}
+equal(new Set(heroSources.values()).size, 3, 'Internal pages use three distinct illustration assets');
+{
+  const home = await open('/');
+  check($(home, '.home-earth .earth-visual'), 'Homepage retains the existing Earth component');
+  check($(home, 'select[aria-label="Movimento do globo"]'), 'Homepage retains the animation preference selector');
+  equal($$(home, '.internal-page-art').length, 0, 'Homepage does not collect internal-page illustrations');
+  home.window.close();
+  const catalogPage = await open('/produtos');
+  equal($$(catalogPage, '.catalog-planet,.earth-visual').length, 0, 'Product catalog focuses on product artwork without another planet');
+  catalogPage.window.close();
+}
+messages.push('Distinct accessible internal-page artwork and preserved page content at six simulated viewport widths in both themes; local desktop/mobile assets exist');
+
+for (const options of [{}, { osDark: true }, { storageBlocked: true }]) {
+  const dom = await open('/', null, options);
+  equal(dom.themeBeforeMount, 'light', 'New visitor receives light theme before React mounts');
+  equal(dom.themeColorBeforeMount.toLowerCase(), '#f8f9ff', 'Initial browser theme color matches light mode');
+  equal(dom.window.document.documentElement.dataset.theme, 'light', 'Default stays light after mounting, including OS-dark and blocked storage');
+  equal($(dom, '.theme-switch').getAttribute('aria-label'), 'Ativar tema escuro', 'Default switch accurately offers dark mode');
+  if (!options.storageBlocked) equal(dom.window.localStorage.getItem('elevon-theme'), null, 'Initial default is not recorded as an explicit preference');
+  else {
+    await click(dom, $(dom, '.theme-switch'));
+    equal(dom.window.document.documentElement.dataset.theme, 'dark', 'Blocked storage does not prevent changing theme in this visit');
+  }
+  dom.window.close();
+}
+for (const saved of ['light', 'dark', 'invalid', '']) {
+  const dom = await open('/sobre', saved, { osDark: true });
+  const expected = saved === 'dark' ? 'dark' : 'light';
+  equal(dom.themeBeforeMount, expected, `${saved || 'empty'} stored preference is resolved before mounting`);
+  equal(dom.window.document.documentElement.dataset.theme, expected, `${saved || 'empty'} stored preference is honored or safely defaults to light`);
+  const color = expected === 'dark' ? '#060916' : '#f8f9ff';
+  equal(dom.themeColorBeforeMount.toLowerCase(), color, `${saved || 'empty'} stored preference sets the initial browser color`);
+  equal($(dom, '.theme-switch').getAttribute('aria-label'), expected === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro', 'Switch label matches the active theme');
+  if (saved === 'light' || saved === 'dark') {
+    await click(dom, $(dom, '.desktop-nav a[href="/redes"]'));
+    await eventually(() => dom.window.location.pathname === '/redes', 'Saved-theme navigation reaches Redes');
+    equal(dom.window.document.documentElement.dataset.theme, expected, 'Explicit saved theme survives route navigation');
+    const reload = await open('/redes', dom.window.localStorage.getItem('elevon-theme'));
+    equal(reload.themeBeforeMount, expected, 'Explicit theme is restored before paint on a new document');
+    reload.window.close();
+  }
+  dom.window.close();
+}
+messages.push('Light first visit regardless of OS theme, pre-mount theme color, saved dark/light preferences, invalid/blocked storage fallback and navigation/reload persistence');
+
 {
   const dom = await open('/produtos');
   equal($$(dom, '.product-card').length, 6, 'Catalog contains exactly six offers');
@@ -178,11 +264,14 @@ messages.push('All 11 valid routes, shared navigation/footer, page metadata, Web
   equal($(dom, '.catalog-toolbar input').value, '', 'Clear filters resets search');
   check($(dom, '.filter-button[aria-pressed="true"]').textContent.includes('Todos'), 'Clear filters resets category');
   await click(dom, $(dom, '.theme-switch'));
-  equal(dom.window.document.documentElement.dataset.theme, 'light', 'Theme toggles without reload');
-  equal(dom.window.localStorage.getItem('elevon-theme'), 'light', 'Theme choice saved locally');
+  equal(dom.window.document.documentElement.dataset.theme, 'dark', 'Theme toggles from the light default without reload');
+  equal(dom.window.localStorage.getItem('elevon-theme'), 'dark', 'Explicit dark choice saved locally');
   await click(dom, $(dom, '.desktop-nav a[href="/sobre"]'));
   await eventually(() => dom.window.location.pathname === '/sobre', 'Theme route navigation');
-  equal(dom.window.document.documentElement.dataset.theme, 'light', 'Theme preserved after navigation');
+  equal(dom.window.document.documentElement.dataset.theme, 'dark', 'Selected dark theme preserved after navigation');
+  await click(dom, $(dom, '.theme-switch'));
+  equal(dom.window.document.documentElement.dataset.theme, 'light', 'Visitor can explicitly return to light mode');
+  equal(dom.window.localStorage.getItem('elevon-theme'), 'light', 'Explicit light choice replaces dark preference');
   dom.window.close();
   const persisted = await open('/', 'light');
   equal(persisted.window.document.documentElement.dataset.theme, 'light', 'Persisted theme read on new visit');
