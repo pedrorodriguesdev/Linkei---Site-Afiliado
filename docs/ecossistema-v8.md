@@ -16,7 +16,7 @@ O núcleo central é uma ilustração de vidro violeta gerada para esta composi�
 - Escolhas explícitas são salvas em `elevon-motion`. Se essa chave ainda não existir, uma escolha explícita antiga `animated` ou `static` de `elevon-earth` é respeitada. Sem escolha explícita, valores inválidos, modo automático antigo ou armazenamento indisponível resultam em animado. As escolhas explícitas antigas estático/animado são respeitadas. Um valor novo estático tem prioridade sobre uma escolha antiga animada.
 - No modo animado, o núcleo e os cartões flutuam poucos pixels, as órbitas oscilam suavemente e o brilho varia em opacidade. A interface reduz os efeitos no celular.
 - O parallax só responde a mouse em desktop com ponteiro preciso, animação habilitada e hero visível. Eventos atualizam variáveis CSS via ref; transições suavizam o movimento. Não há estado React por movimento, leituras de layout em cada movimento ou loop JavaScript de frames.
-- `IntersectionObserver` e `visibilitychange` pausam as animações fora da tela ou com a aba oculta. As preferências de movimento reduzido prevalecem, sem apagar a escolha salva. Listeners e observers são removidos ao desmontar.
+- `IntersectionObserver` e `visibilitychange` desativam as animações fora da tela ou com a aba oculta; elas são recriadas em execução quando o visual volta a ficar ativo. As preferências de movimento reduzido prevalecem, sem apagar a escolha salva. Listeners e observers são removidos ao desmontar.
 - Em estático, toda a composição permanece visível, sem animações ou parallax.
 
 ## Responsividade e temas
@@ -54,8 +54,16 @@ O JS inicial cresce ligeiramente com o novo componente; a redução vem das imag
 
 ## Testes e limitações
 
-Passaram 667 verificações da aplicação e 295 do ecossistema: **962 no total**. A suíte verifica persistência, migração, armazenamento bloqueado, modo estático, preferência de movimento reduzido, visibilidade da aba/viewport, parallax restrito, limpeza de listeners, ausência de RAF e WebGL, arquivos de imagem e conteúdo dos cartões. Navegação, busca, filtros, páginas de produto, parâmetros dos links comerciais e artes internas continuam cobertos.
+Passaram 685 verificações da aplicação e 420 do ecossistema: **1.105 no total**. A suíte verifica persistência, migração, armazenamento bloqueado, modo estático, preferência de movimento reduzido, visibilidade da aba/viewport, parallax restrito, limpeza de listeners, ausência de RAF e WebGL, arquivos de imagem e conteúdo dos cartões. Navegação, busca, filtros, páginas de produto, parâmetros dos links comerciais e artes internas continuam cobertos.
 
 TypeScript, Vite e geração das 11 entradas estáticas passaram. O artefato foi inspecionado para confirmar a ausência do renderer e das imagens antigas. As propriedades CSS e a arquitetura responsiva foram revisadas; jsdom não calcula o layout visual real.
 
 A arte do núcleo foi inspecionada visualmente. A ferramenta de navegador exigida pelo preview gerenciado do Sites não está disponível neste ambiente; não foram feitas capturas reais do hero em navegador, comparação pixel a pixel ou medições de suavidade/GPU. O acabamento final em diferentes navegadores e GPUs ainda precisa dessa inspeção. O acesso à conta Cloudflare também não está disponível: a publicação no Sites e o push ao GitHub não confirmam que o Cloudflare tenha recuperado sua própria autorização.
+
+## Inicialização automática e retorno à página
+
+A montagem sincroniza imediatamente a visibilidade do documento e mede uma vez os limites do visual. Assim, um hero que já está na tela começa a animar antes mesmo da primeira entrega assíncrona do IntersectionObserver. Os eventos `pageshow`, `pagehide`, `visibilitychange` e resize ressincronizam o estado ao sair ou voltar, inclusive quando a página é restaurada do cache de navegação. Não foi introduzido loop JavaScript.
+
+A folha CSS cria as animações somente com `data-motion=animated` e `data-active=true`. O estado inativo remove a animação em vez de criá-la previamente pausada. Entrada inicial, retorno à página e a troca Estático → Animado usam a mesma ativação das animações. Os listeners adicionados são removidos ao desmontar.
+
+A regressão de inicialização, sem evento manual do observer ou seletor, falhou no código anterior e passou após o ajuste. Os testes agora aplicam a folha CSS real ao DOM e verificam a presença das animações do núcleo/cartões, a remoção em estático ou fora da tela e a equivalência entre a ativação inicial e a troca manual. Também cobrem retorno à página, preferência estática salva e limpeza de listeners. Isso valida o fluxo e as declarações CSS; não equivale a medir quadros reais em um navegador Android.

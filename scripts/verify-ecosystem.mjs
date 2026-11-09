@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
 const project = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const stylesheet = await readFile(path.join(project, 'src/components/digital-ecosystem.css'), 'utf8');
 let assertions = 0;
 const check = (value, label) => { assert.ok(value, label); assertions++; };
 const equal = (actual, expected, label) => { assert.deepEqual(actual, expected, label); assertions++; };
@@ -31,6 +32,7 @@ async function open(options = {}) {
   console.on('error', (...args) => errors.push(args.map(String).join(' ')));
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'https://elevon.test/', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: console });
   const w = dom.window;
+  const style = w.document.createElement('style'); style.textContent = stylesheet; w.document.head.appendChild(style);
   if (options.preference !== undefined) w.localStorage.setItem('elevon-motion', options.preference);
   if (options.legacy !== undefined) w.localStorage.setItem('elevon-earth', options.legacy);
   if (options.storageBlocked) Object.defineProperty(w, 'localStorage', { get() { throw new w.DOMException('Storage unavailable', 'SecurityError'); } });
@@ -68,14 +70,17 @@ async function open(options = {}) {
   w.document.addEventListener = (type, callback, ...rest) => { if (type === 'visibilitychange') visibilityListeners.add(callback); return originalAdd(type, callback, ...rest); };
   w.document.removeEventListener = (type, callback, ...rest) => { if (type === 'visibilitychange') visibilityListeners.delete(callback); return originalRemove(type, callback, ...rest); };
   const resizeListeners = new Set();
+  const pageShowListeners = new Set();
+  const pageHideListeners = new Set();
   const windowAdd = w.addEventListener.bind(w);
   const windowRemove = w.removeEventListener.bind(w);
-  w.addEventListener = (type, callback, ...rest) => { if (type === 'resize') resizeListeners.add(callback); return windowAdd(type, callback, ...rest); };
-  w.removeEventListener = (type, callback, ...rest) => { if (type === 'resize') resizeListeners.delete(callback); return windowRemove(type, callback, ...rest); };
+  w.addEventListener = (type, callback, ...rest) => { if (type === 'resize') resizeListeners.add(callback); if (type === 'pageshow') pageShowListeners.add(callback); if (type === 'pagehide') pageHideListeners.add(callback); return windowAdd(type, callback, ...rest); };
+  w.removeEventListener = (type, callback, ...rest) => { if (type === 'resize') resizeListeners.delete(callback); if (type === 'pageshow') pageShowListeners.delete(callback); if (type === 'pagehide') pageHideListeners.delete(callback); return windowRemove(type, callback, ...rest); };
   const frames = new Map(); let frameID = 0, requestedFrames = 0;
   w.requestAnimationFrame = callback => { requestedFrames++; frames.set(++frameID, callback); return frameID; };
   w.cancelAnimationFrame = handle => frames.delete(handle);
-  w.HTMLElement.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 500, bottom: 500, width: 500, height: 500 });
+  let bounds = { x: 0, y: 0, left: 0, top: 0, right: 500, bottom: 500, width: 500, height: 500, ...options.bounds };
+  w.HTMLElement.prototype.getBoundingClientRect = () => bounds;
   w.eval(compiled.outputFiles[0].text);
   await eventually(() => w.document.querySelector('.digital-ecosystem'), 'Digital Ecosystem did not mount');
   await tick();
@@ -86,6 +91,10 @@ async function open(options = {}) {
     w, element, select, observers, queries, frames,
     get requestedFrames() { return requestedFrames; },
     async choose(value) { select.value = value; select.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(); },
+    setBounds(next) { bounds = { ...bounds, ...next }; },
+    animation(selector = '.ecosystem-core') { return w.getComputedStyle(element.querySelector(selector)).animation || 'none'; },
+    async pageHide() { w.dispatchEvent(new w.Event('pagehide')); await tick(); },
+    async pageShow() { w.dispatchEvent(new w.Event('pageshow')); await tick(); },
     async visible(value) { observers.forEach(observer => observer.emit(value)); await tick(); },
     async hidden(value) { hidden = value; w.document.dispatchEvent(new w.Event('visibilitychange')); await tick(); },
     async reduced(value) { for (const [query, media] of queries) if (query.includes('prefers-reduced-motion')) media.change(value); await tick(); },
@@ -93,6 +102,8 @@ async function open(options = {}) {
       w.__root.unmount(); await tick();
       equal(visibilityListeners.size, 0, 'Unmount releases visibility listeners');
       equal(resizeListeners.size, 0, 'Unmount releases resize listeners');
+      equal(pageShowListeners.size, 0, 'Unmount releases page restore listeners');
+      equal(pageHideListeners.size, 0, 'Unmount releases page leave listeners');
       check(observers.every(observer => observer.targets.size === 0), 'Unmount disconnects visibility observations');
       check([...queries.values()].every(media => media.listeners.size === 0), 'Unmount releases media-query listeners');
       equal(frames.size, 0, 'Unmount leaves no animation frame scheduled');
@@ -100,6 +111,47 @@ async function open(options = {}) {
       w.close();
     },
   };
+}
+
+// Real stylesheet + initial bounds: startup must not depend on a selector event
+// or waiting for IntersectionObserver's first asynchronous delivery.
+for (const options of [{}, { width: 390, finePointer: false }, { preference: 'animated' }]) {
+  const test = await open(options);
+  equal(test.select.value, 'animated', 'Initial visible hero selects animation');
+  equal(test.element.dataset.active, 'true', 'Initial visible hero starts without observer or selector interaction');
+  check(test.animation().includes('ecosystem-core-float'), 'Real CSS creates the core animation on initial activation');
+  check(test.animation('.card-marketing .ecosystem-card').includes('ecosystem-card-float'), 'Real CSS creates card motion on initial activation');
+  const automatic = test.animation();
+  await test.choose('static'); equal(test.animation(), 'none', 'Static choice removes CSS animation');
+  await test.choose('animated'); equal(test.animation(), automatic, 'Initial animation configuration matches the working toggle path');
+  equal(test.requestedFrames, 0, 'Automatic startup needs no JavaScript frame loop');
+  await test.finish();
+}
+{
+  const test = await open({ bounds: { top: 1400, bottom: 1900 } });
+  equal(test.element.dataset.active, 'false', 'Initially offscreen hero remains stopped');
+  equal(test.animation(), 'none', 'Initially offscreen core has no pre-created paused animation');
+  test.setBounds({ top: 0, bottom: 500 });
+  await test.visible(true);
+  check(test.animation().includes('ecosystem-core-float'), 'First intersection creates a fresh running animation');
+  await test.visible(false);
+  equal(test.animation(), 'none', 'Leaving the viewport releases the animation instead of parking it paused');
+  test.setBounds({ top: 1400, bottom: 1900 });
+  await test.pageHide(); await test.pageShow();
+  equal(test.element.dataset.active, 'false', 'Restoring an offscreen page keeps decoration stopped');
+  test.setBounds({ top: 0, bottom: 500 });
+  await test.pageShow();
+  equal(test.element.dataset.active, 'true', 'Page restoration rechecks visible bounds without a selector change');
+  check(test.animation().includes('ecosystem-core-float'), 'Page restoration creates the running CSS animation');
+  await test.pageHide(); equal(test.animation(), 'none', 'Leaving the page stops CSS animations');
+  await test.pageShow(); check(test.animation().includes('ecosystem-core-float'), 'Returning to the page starts decoration again');
+  await test.finish();
+}
+{
+  const test = await open({ preference: 'static' }); await test.pageHide(); await test.pageShow();
+  equal(test.select.value, 'static', 'Page restoration preserves the explicit static selection');
+  equal(test.animation(), 'none', 'Page restoration does not override static motion');
+  await test.finish();
 }
 
 for (const [label, options, expected] of [

@@ -44,28 +44,48 @@ export default function DigitalEcosystem() {
   useEffect(() => {
     const element = stage.current!;
     let observer: IntersectionObserver | undefined;
+    let motion: MediaQueryList | undefined;
+    const syncViewport = () => {
+      if (!observer) { setVisible(true); return; }
+      const rect = element.getBoundingClientRect();
+      const width = window.innerWidth || document.documentElement.clientWidth;
+      const height = window.innerHeight || document.documentElement.clientHeight;
+      setVisible(rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width);
+    };
+    const refresh = () => {
+      setHidden(document.hidden);
+      if (motion) setReduced(motion.matches);
+      resetPointer();
+      syncViewport();
+    };
+    const leavePage = () => { setHidden(true); resetPointer(); };
     if (typeof IntersectionObserver === 'function') {
       observer = new IntersectionObserver(entries => setVisible(entries.some(entry => entry.isIntersecting)));
       observer.observe(element);
-    } else setVisible(true);
-    const visibility = () => { setHidden(document.hidden); if (document.hidden) resetPointer(); };
-    const resize = () => resetPointer();
-    document.addEventListener('visibilitychange', visibility);
-    window.addEventListener('resize', resize, { passive: true });
+    }
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('resize', refresh, { passive: true });
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('pagehide', leavePage);
     const listeners: Array<[MediaQueryList, () => void]> = [];
     if (typeof matchMedia === 'function') {
-      const motion = matchMedia('(prefers-reduced-motion: reduce)');
+      motion = matchMedia('(prefers-reduced-motion: reduce)');
       const fine = matchMedia('(pointer: fine) and (hover: hover)');
       const wide = matchMedia('(min-width: 1024px)');
       media.current = { fine, wide };
-      const motionChanged = () => { setReduced(motion.matches); resetPointer(); };
+      const motionChanged = () => { setReduced(motion!.matches); resetPointer(); };
       listeners.push([motion, motionChanged], [fine, resetPointer], [wide, resetPointer]);
       listeners.forEach(([query, listener]) => query.addEventListener('change', listener));
     }
+    // Start an already visible hero immediately, even before the observer's first
+    // callback; also resync the tab state that may have changed during loading.
+    refresh();
     return () => {
       observer?.disconnect();
-      document.removeEventListener('visibilitychange', visibility);
-      window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('resize', refresh);
+      window.removeEventListener('pageshow', refresh);
+      window.removeEventListener('pagehide', leavePage);
       listeners.forEach(([query, listener]) => query.removeEventListener('change', listener));
       media.current = null;
     };

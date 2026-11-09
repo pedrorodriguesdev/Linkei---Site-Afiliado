@@ -87,14 +87,15 @@
 .digital-ecosystem .ecosystem-motion-note {font-size:10px;color:var(--muted);}
 .digital-ecosystem .ecosystem-caption {display:flex;align-items:center;justify-content:center;gap:12px;margin-top:1px;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--body);}
 .digital-ecosystem .ecosystem-caption::before {content:'';height:1px;width:25px;background:var(--accent-gradient);}
-/* Animations are allocated only after explicit motion opt-in, and paused by visibility. */
-.digital-ecosystem[data-motion=animated] .ecosystem-core {animation:ecosystem-core-float 7s ease-in-out infinite;}
-.digital-ecosystem[data-motion=animated] .card-marketing .ecosystem-card {animation:ecosystem-card-float 8s ease-in-out -1s infinite;}
-.digital-ecosystem[data-motion=animated] .card-technology .ecosystem-card {animation:ecosystem-card-float 9s ease-in-out -3s infinite;}
-.digital-ecosystem[data-motion=animated] .card-tools .ecosystem-card {animation:ecosystem-card-float 8.5s ease-in-out -2s infinite;}
-.digital-ecosystem[data-motion=animated] .ecosystem-orbits {animation:ecosystem-orbit-sway 13s ease-in-out infinite;transform-origin:55% 50%;}
-.digital-ecosystem[data-motion=animated] .ecosystem-floor-glow {animation:ecosystem-light-breathe 7s ease-in-out infinite;}
-.digital-ecosystem[data-active=false] * {animation-play-state:paused!important;}
+/* Create animations only in the running state. Initial entry and a manual
+   static-to-animated change now use the same fresh animation creation path. */
+.digital-ecosystem[data-motion=animated][data-active=true] .ecosystem-core {animation:ecosystem-core-float 7s ease-in-out infinite;}
+.digital-ecosystem[data-motion=animated][data-active=true] .card-marketing .ecosystem-card {animation:ecosystem-card-float 8s ease-in-out -1s infinite;}
+.digital-ecosystem[data-motion=animated][data-active=true] .card-technology .ecosystem-card {animation:ecosystem-card-float 9s ease-in-out -3s infinite;}
+.digital-ecosystem[data-motion=animated][data-active=true] .card-tools .ecosystem-card {animation:ecosystem-card-float 8.5s ease-in-out -2s infinite;}
+.digital-ecosystem[data-motion=animated][data-active=true] .ecosystem-orbits {animation:ecosystem-orbit-sway 13s ease-in-out infinite;transform-origin:55% 50%;}
+.digital-ecosystem[data-motion=animated][data-active=true] .ecosystem-floor-glow {animation:ecosystem-light-breathe 7s ease-in-out infinite;}
+.digital-ecosystem[data-active=false] * {animation:none!important;}
 .digital-ecosystem[data-active=false] .ecosystem-scene,.digital-ecosystem[data-motion=static] .ecosystem-scene {transform:none;translate:none;}
 .digital-ecosystem[data-motion=static] * {animation:none!important;transition:none!important;}
 .digital-ecosystem[data-active=false] .ecosystem-scene {transition:none;}
@@ -140,7 +141,7 @@
  .digital-ecosystem .tile-image,.digital-ecosystem .tile-users,.digital-ecosystem .tile-settings {display:none;}
  .digital-ecosystem .ecosystem-controls {margin-top:7px;}
  .digital-ecosystem .ecosystem-caption {font-size:7px;letter-spacing:.14em;}
- .digital-ecosystem[data-motion=animated] .ecosystem-orbits {animation:none;}
+ .digital-ecosystem[data-motion=animated][data-active=true] .ecosystem-orbits {animation:none;}
 }
 @media(max-width:359px) {
  .digital-ecosystem .ecosystem-card-heading h3 {font-size:12px;}.digital-ecosystem .ecosystem-card li {font-size:9px;}.digital-ecosystem .card-dots {display:none;}
