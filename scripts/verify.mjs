@@ -83,6 +83,8 @@ async function open(route, theme = null, options = {}) {
   const initial = [...window.document.querySelectorAll('script')].find(element => !element.src)?.textContent;
   if (initial) window.eval(initial);
   dom.themeBeforeMount = window.document.documentElement.dataset.theme;
+  dom.colorSchemeBeforeMount = window.document.documentElement.style.colorScheme.trim().split(/\s+/).sort().join(' ');
+  dom.supportedSchemesBeforeMount = window.document.querySelector('meta[name="color-scheme"]')?.content;
   dom.themeColorBeforeMount = window.document.querySelector('meta[name="theme-color"]')?.content;
   window.eval(script);
   await eventually(() => window.document.querySelector('h1'), `Route ${route} did not render`);
@@ -210,6 +212,8 @@ messages.push('Distinct accessible internal-page artwork and preserved page cont
 for (const options of [{}, { osDark: true }, { storageBlocked: true }]) {
   const dom = await open('/', null, options);
   equal(dom.themeBeforeMount, 'light', 'New visitor receives light theme before React mounts');
+  equal(dom.colorSchemeBeforeMount, 'light only', 'Pre-paint light scheme opts out of automatic browser darkening');
+  equal(dom.supportedSchemesBeforeMount, 'only light', 'Early metadata declares only the selected light scheme');
   equal(dom.themeColorBeforeMount.toLowerCase(), '#f8f9ff', 'Initial browser theme color matches light mode');
   equal(dom.window.document.documentElement.dataset.theme, 'light', 'Default stays light after mounting, including OS-dark and blocked storage');
   equal($(dom, '.theme-switch').getAttribute('aria-label'), 'Ativar tema escuro', 'Default switch accurately offers dark mode');
@@ -224,6 +228,8 @@ for (const saved of ['light', 'dark', 'invalid', '']) {
   const dom = await open('/sobre', saved, { osDark: true });
   const expected = saved === 'dark' ? 'dark' : 'light';
   equal(dom.themeBeforeMount, expected, `${saved || 'empty'} stored preference is resolved before mounting`);
+  equal(dom.colorSchemeBeforeMount, expected === 'dark' ? 'dark' : 'light only', 'Browser color scheme follows the resolved preference before mounting');
+  equal(dom.supportedSchemesBeforeMount, expected === 'dark' ? 'dark' : 'only light', 'Scheme metadata follows the resolved preference before mounting');
   equal(dom.window.document.documentElement.dataset.theme, expected, `${saved || 'empty'} stored preference is honored or safely defaults to light`);
   const color = expected === 'dark' ? '#060916' : '#f8f9ff';
   equal(dom.themeColorBeforeMount.toLowerCase(), color, `${saved || 'empty'} stored preference sets the initial browser color`);
@@ -238,7 +244,7 @@ for (const saved of ['light', 'dark', 'invalid', '']) {
   }
   dom.window.close();
 }
-messages.push('Light first visit regardless of OS theme, pre-mount theme color, saved dark/light preferences, invalid/blocked storage fallback and navigation/reload persistence');
+messages.push('Light first visit regardless of OS theme, pre-paint automatic-darkening opt-out, pre-mount theme color, saved dark/light preferences, invalid/blocked storage fallback and navigation/reload persistence');
 
 {
   const dom = await open('/produtos');
@@ -267,12 +273,16 @@ messages.push('Light first visit regardless of OS theme, pre-mount theme color, 
   check($(dom, '.filter-button[aria-pressed="true"]').textContent.includes('Todos'), 'Clear filters resets category');
   await click(dom, $(dom, '.theme-switch'));
   equal(dom.window.document.documentElement.dataset.theme, 'dark', 'Theme toggles from the light default without reload');
+  equal(dom.window.document.documentElement.style.colorScheme, 'dark', 'Manual dark choice also updates browser color scheme');
+  equal($(dom, 'meta[name="color-scheme"]').content, 'dark', 'Manual dark choice updates scheme metadata');
   equal(dom.window.localStorage.getItem('elevon-theme'), 'dark', 'Explicit dark choice saved locally');
   await click(dom, $(dom, '.desktop-nav a[href="/sobre"]'));
   await eventually(() => dom.window.location.pathname === '/sobre', 'Theme route navigation');
   equal(dom.window.document.documentElement.dataset.theme, 'dark', 'Selected dark theme preserved after navigation');
   await click(dom, $(dom, '.theme-switch'));
   equal(dom.window.document.documentElement.dataset.theme, 'light', 'Visitor can explicitly return to light mode');
+  equal(dom.window.document.documentElement.style.colorScheme.trim().split(/\s+/).sort().join(' '), 'light only', 'Returning to light restores the automatic-darkening opt-out');
+  equal($(dom, 'meta[name="color-scheme"]').content, 'only light', 'Returning to light also updates scheme metadata');
   equal(dom.window.localStorage.getItem('elevon-theme'), 'light', 'Explicit light choice replaces dark preference');
   dom.window.close();
   const persisted = await open('/', 'light');

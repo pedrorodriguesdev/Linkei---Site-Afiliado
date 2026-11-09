@@ -19,7 +19,9 @@
  --site-header-height:76px;--motion-ease:cubic-bezier(.22,1,.36,1);--section-light:var(--accent-tint);
  --hero-lavender:rgba(166,137,244,.30);--hero-start:rgba(255,255,255,.45);--hero-end:#e9e3ff;
  --hero-wave-border:#ffffffb0;--hero-wave:#cbbdfa55;--hero-art-glow:#b3a0f03d;
+ /* Opt out of Android/Chrome automatic darkening unless the visitor selects dark. */
  color-scheme:light;
+ color-scheme:only light;
 }
 
 [data-theme=dark] {

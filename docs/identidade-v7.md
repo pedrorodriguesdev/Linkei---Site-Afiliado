@@ -48,3 +48,9 @@ O build passou com TypeScript, Vite e as 11 entradas estáticas. `npm run verify
 A suíte do globo permanece disponível para rotação, único RAF, pausas, qualidade adaptativa, preferências e descarte de recursos. O código do renderer da V6 e os seis produtos, suas artes e parâmetros de afiliação não foram alterados.
 
 As ilustrações geradas foram inspecionadas visualmente. O ambiente não disponibilizou a ferramenta de navegador prevista pelo preview gerenciado do Sites; não foram obtidas capturas reais das páginas nem medições de FPS, GPU ou Lighthouse. A correspondência visual exata e o layout final nos dispositivos precisam de inspeção em navegador real. Não se afirma equivalência pixel a pixel com a referência.
+
+## Proteção contra escurecimento automático no Android
+
+Após o relato de um visitante Android que viu a página escura sem selecionar o tema, foi adicionado `color-scheme: only light` no tema claro, no bootstrap antes da primeira pintura e nos metadados do documento. A escolha manual de escuro muda a indicação para `dark`; ao voltar a claro, restaura `only light`. O objetivo é impedir a transformação automática de cores por navegadores compatíveis sem remover a opção de tema escuro nem apagar escolhas legítimas salvas.
+
+A [documentação do MDN](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/color-scheme) indica `only light` como forma de desativar as substituições de cor do Auto Dark Theme do Chrome. O relato não informou o navegador Android específico, e não houve reprodução em aparelho real; portanto não foi confirmada a causa naquele dispositivo. As verificações executam o bootstrap e a troca de tema, incluindo as indicações de esquema ao navegador. Elas não simulam o algoritmo de autoescurecimento do Android.
