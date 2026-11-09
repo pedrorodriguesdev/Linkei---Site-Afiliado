@@ -200,7 +200,7 @@ equal(new Set(heroSources.values()).size, 3, 'Internal pages use three distinct 
   check($(home, '.digital-ecosystem'), 'Homepage shows the new Digital Ecosystem');
   equal($$(home, '.earth-visual,canvas').length, 0, 'Homepage no longer mounts an Earth renderer');
   equal($$(home, '.ecosystem-card h3').map(title => title.textContent), ['Marketing', 'Tecnologia', 'Ferramentas'], 'Homepage keeps the three conceptual category cards');
-  check($(home, 'select[aria-label="Animação do ecossistema"]'), 'Homepage offers an ecosystem animation preference selector');
+  check(!$(home, '.ecosystem-controls,select[aria-label="Animação do ecossistema"]'), 'Homepage animation no longer offers a static-mode selector');
   equal($$(home, '.internal-page-art').length, 0, 'Homepage does not collect internal-page illustrations');
   home.window.close();
   const catalogPage = await open('/produtos');

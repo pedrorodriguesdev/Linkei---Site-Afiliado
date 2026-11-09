@@ -2,7 +2,7 @@
 
 Plataforma de descoberta e indicação de seis produtos digitais, em português brasileiro.
 
-A página inicial usa o **Ecossistema Digital V8**: cartões HTML em CSS 3D, órbitas SVG e um pequeno núcleo de vidro pré-renderizado. Inicia **animado por padrão**; o seletor **Animação** permite deixar estático e salva a escolha em `elevon-motion`, respeitando movimento reduzido. Preferências explícitas antigas de `elevon-earth` são lidas apenas como migração. A Terra e o Three.js foram retirados do código e do build. Os relatos V2–V7 abaixo documentam versões históricas; a arquitetura atual está em [docs/ecossistema-v8.md](docs/ecossistema-v8.md). Para o aviso de conexão Git do Cloudflare, veja [docs/cloudflare-git.md](docs/cloudflare-git.md).
+A página inicial usa o **Ecossistema Digital V8**: cartões HTML em CSS 3D, órbitas SVG e um pequeno núcleo de vidro pré-renderizado. O visual **anima automaticamente, sem seletor**. As opções antigas de movimento deixaram de ser lidas; permanecem as pausas fora da tela, com a aba oculta e a preferência de movimento reduzido do aparelho. A Terra e o Three.js foram retirados do código e do build. Os relatos V2–V7 abaixo documentam versões históricas; a arquitetura atual está em [docs/ecossistema-v8.md](docs/ecossistema-v8.md). Para o aviso de conexão Git do Cloudflare, veja [docs/cloudflare-git.md](docs/cloudflare-git.md).
 
 ## Desenvolvimento
 

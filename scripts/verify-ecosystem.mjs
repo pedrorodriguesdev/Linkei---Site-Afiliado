@@ -86,11 +86,10 @@ async function open(options = {}) {
   await tick();
   const element = w.document.querySelector('.digital-ecosystem');
   const select = element.querySelector('select[aria-label="Animação do ecossistema"]');
-  check(select, 'Motion selector has an accessible label');
+  check(!select && !element.querySelector('.ecosystem-controls'), 'Animation is automatic without a motion selector');
   return {
     w, element, select, observers, queries, frames,
     get requestedFrames() { return requestedFrames; },
-    async choose(value) { select.value = value; select.dispatchEvent(new w.Event('change', { bubbles: true })); await tick(); },
     setBounds(next) { bounds = { ...bounds, ...next }; },
     animation(selector = '.ecosystem-core') { return w.getComputedStyle(element.querySelector(selector)).animation || 'none'; },
     async pageHide() { w.dispatchEvent(new w.Event('pagehide')); await tick(); },
@@ -113,141 +112,80 @@ async function open(options = {}) {
   };
 }
 
-// Real stylesheet + initial bounds: startup must not depend on a selector event
-// or waiting for IntersectionObserver's first asynchronous delivery.
-for (const options of [{}, { width: 390, finePointer: false }, { preference: 'animated' }]) {
+// Read the real stylesheet, not just the animated label: every normal entry
+// must create CSS animations even if an obsolete stored choice says static.
+for (const [label, options] of [
+  ['new desktop visitor', {}], ['new mobile visitor', { width: 390, finePointer: false }],
+  ['old static choice', { preference: 'static' }], ['old animated choice', { preference: 'animated' }],
+  ['old invalid choice', { preference: 'invalid' }], ['legacy static choice', { legacy: 'static' }],
+  ['both old keys static', { preference: 'static', legacy: 'static' }], ['storage blocked', { storageBlocked: true }],
+]) {
   const test = await open(options);
-  equal(test.select.value, 'animated', 'Initial visible hero selects animation');
-  equal(test.element.dataset.active, 'true', 'Initial visible hero starts without observer or selector interaction');
-  check(test.animation().includes('ecosystem-core-float'), 'Real CSS creates the core animation on initial activation');
-  check(test.animation('.card-marketing .ecosystem-card').includes('ecosystem-card-float'), 'Real CSS creates card motion on initial activation');
-  const automatic = test.animation();
-  await test.choose('static'); equal(test.animation(), 'none', 'Static choice removes CSS animation');
-  await test.choose('animated'); equal(test.animation(), automatic, 'Initial animation configuration matches the working toggle path');
-  equal(test.requestedFrames, 0, 'Automatic startup needs no JavaScript frame loop');
+  equal(test.element.dataset.motion, 'animated', `${label}: permanent animation ignores obsolete preferences`);
+  equal(test.element.dataset.active, 'true', `${label}: visible hero starts without any interaction or observer event`);
+  check(test.animation().includes('ecosystem-core-float'), `${label}: actual core animation is created on entry`);
+  check(test.animation('.card-marketing .ecosystem-card').includes('ecosystem-card-float'), `${label}: actual card animation is created on entry`);
+  equal(test.requestedFrames, 0, `${label}: no JavaScript frame loop`);
+  equal(test.element.querySelectorAll('canvas').length, 0, `${label}: no WebGL canvas`);
+  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, `${label}: all category cards stay visible`);
+  check(test.element.querySelector('.ecosystem-orbits'), `${label}: orbital connections stay visible`);
+  check(![...test.element.querySelectorAll('img,source')].some(image => /\/earth\//.test((image.getAttribute('src') || '') + (image.getAttribute('srcset') || ''))), `${label}: no old Earth texture URLs`);
+  await test.pageHide(); await test.pageShow();
+  equal(test.element.dataset.active, 'true', `${label}: page restoration restarts automatic motion`);
   await test.finish();
 }
 {
   const test = await open({ bounds: { top: 1400, bottom: 1900 } });
-  equal(test.element.dataset.active, 'false', 'Initially offscreen hero remains stopped');
+  equal(test.element.dataset.active, 'false', 'Initially offscreen hero stays stopped');
   equal(test.animation(), 'none', 'Initially offscreen core has no pre-created paused animation');
-  test.setBounds({ top: 0, bottom: 500 });
-  await test.visible(true);
+  test.setBounds({ top: 0, bottom: 500 }); await test.visible(true);
   check(test.animation().includes('ecosystem-core-float'), 'First intersection creates a fresh running animation');
-  await test.visible(false);
-  equal(test.animation(), 'none', 'Leaving the viewport releases the animation instead of parking it paused');
-  test.setBounds({ top: 1400, bottom: 1900 });
-  await test.pageHide(); await test.pageShow();
+  await test.visible(false); equal(test.animation(), 'none', 'Leaving the viewport releases CSS animations');
+  test.setBounds({ top: 1400, bottom: 1900 }); await test.pageHide(); await test.pageShow();
   equal(test.element.dataset.active, 'false', 'Restoring an offscreen page keeps decoration stopped');
-  test.setBounds({ top: 0, bottom: 500 });
-  await test.pageShow();
-  equal(test.element.dataset.active, 'true', 'Page restoration rechecks visible bounds without a selector change');
-  check(test.animation().includes('ecosystem-core-float'), 'Page restoration creates the running CSS animation');
-  await test.pageHide(); equal(test.animation(), 'none', 'Leaving the page stops CSS animations');
-  await test.pageShow(); check(test.animation().includes('ecosystem-core-float'), 'Returning to the page starts decoration again');
+  test.setBounds({ top: 0, bottom: 500 }); await test.pageShow();
+  equal(test.element.dataset.active, 'true', 'Page restoration rechecks visible bounds');
+  check(test.animation().includes('ecosystem-core-float'), 'Page restoration creates running CSS motion');
   await test.finish();
 }
 {
-  const test = await open({ preference: 'static' }); await test.pageHide(); await test.pageShow();
-  equal(test.select.value, 'static', 'Page restoration preserves the explicit static selection');
-  equal(test.animation(), 'none', 'Page restoration does not override static motion');
-  await test.finish();
-}
-
-for (const [label, options, expected] of [
-  ['new visitor', {}, 'animated'], ['new mobile visitor', { width: 390, finePointer: false }, 'animated'],
-  ['saved static', { preference: 'static' }, 'static'], ['invalid preference', { preference: 'invalid' }, 'animated'],
-  ['empty preference', { preference: '' }, 'animated'], ['legacy automatic', { legacy: 'auto' }, 'animated'],
-  ['legacy static', { legacy: 'static' }, 'static'], ['blocked storage', { storageBlocked: true }, 'animated'],
-]) {
-  const test = await open(options); await test.visible(true);
-  equal(test.select.value, expected, `${label}: default animation respects explicit saved choices`);
-  equal([...test.select.options].map(option => option.value), ['animated', 'static'], `${label}: animated is the first option`);
-  equal(test.element.dataset.motion, expected, `${label}: effective motion matches the preference`);
-  equal(test.element.dataset.active, String(expected === 'animated'), `${label}: only animated mode runs while visible`);
-  equal(test.requestedFrames, 0, `${label}: no JavaScript animation frame requested`);
-  equal(test.element.querySelectorAll('canvas').length, 0, `${label}: no WebGL canvas`);
-  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, `${label}: full composition remains visible`);
-  check(test.element.querySelector('.ecosystem-orbits'), `${label}: orbital connections remain visible`);
-  check(![...test.element.querySelectorAll('img,source')].some(image => /\/earth\//.test((image.getAttribute('src') || '') + (image.getAttribute('srcset') || ''))), `${label}: no Earth texture URLs`);
-  await test.finish();
-}
-{
-  const test = await open(); await test.visible(true);
-  equal([...test.element.querySelectorAll('.ecosystem-card h3')].map(title => title.textContent), ['Marketing', 'Tecnologia', 'Ferramentas'], 'Three readable category cards are HTML headings');
-  check(test.element.textContent.includes('Estratégias') && test.element.textContent.includes('Automação') && test.element.textContent.includes('Recursos digitais'), 'Conceptual card labels remain readable HTML');
-  check(!test.element.querySelector('.ecosystem-card a,.ecosystem-card button'), 'Decorative cards are not fake controls');
+  const test = await open();
+  equal([...test.element.querySelectorAll('.ecosystem-card h3')].map(title => title.textContent), ['Marketing', 'Tecnologia', 'Ferramentas'], 'Category titles remain readable HTML headings');
+  check(test.element.textContent.includes('Estratégias') && test.element.textContent.includes('Automação') && test.element.textContent.includes('Recursos digitais'), 'All conceptual category text remains HTML');
+  check(!test.element.querySelector('.ecosystem-card a,.ecosystem-card button'), 'Illustrative cards do not become fake controls');
   const core = test.element.querySelector('img');
-  check(core && core.alt === '' && core.width > 0 && core.height > 0, 'Decorative core has empty alt and intrinsic dimensions');
+  check(core && core.alt === '' && core.width > 0 && core.height > 0, 'Decorative core has intrinsic dimensions and empty alt');
   for (const image of test.element.querySelectorAll('img,source')) {
     const source = image.getAttribute('src') || image.getAttribute('srcset');
-    check(source && (await stat(path.join(project, 'public', source))).size > 0, 'Referenced core art asset exists');
+    check(source && (await stat(path.join(project, 'public', source))).size > 0, 'Referenced core asset exists');
   }
-  await test.choose('animated');
-  equal(test.w.localStorage.getItem('elevon-motion'), 'animated', 'Explicit animated choice is persisted');
-  equal(test.element.dataset.motion, 'animated', 'Explicit choice enables motion');
-  equal(test.element.dataset.active, 'true', 'Visible active tab allows CSS animation');
-  await test.visible(false); equal(test.element.dataset.active, 'false', 'Leaving viewport pauses decoration');
-  await test.visible(true); equal(test.element.dataset.active, 'true', 'Re-entering viewport resumes decoration');
-  await test.hidden(true); equal(test.element.dataset.active, 'false', 'Hidden browser tab pauses decoration');
-  await test.hidden(false); equal(test.element.dataset.active, 'true', 'Visible browser tab resumes decoration');
-  await test.reduced(true); equal(test.element.dataset.active, 'false', 'Reduced-motion preference stops active decoration');
-  equal(test.select.value, 'animated', 'Reduced motion preserves the explicit saved selection');
-  await test.reduced(false); equal(test.element.dataset.active, 'true', 'Motion resumes when reduced-motion preference is removed');
-  await test.finish();
-}
-for (const options of [{ preference: 'animated' }, { legacy: 'animated' }]) {
-  const test = await open(options); await test.visible(true);
-  equal(test.select.value, 'animated', 'New or legacy explicit animation choice is restored');
-  equal(test.element.dataset.active, 'true', 'Restored animated choice can run in view');
-  await test.choose('static');
-  equal(test.w.localStorage.getItem('elevon-motion'), 'static', 'Static choice replaces restored animation');
-  equal(test.element.dataset.active, 'false', 'Static selection immediately pauses animation');
-  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, 'Changing to static retains the whole visual');
-  equal(test.requestedFrames, 0, 'CSS-only animation does not introduce a JavaScript frame loop');
-  const savedStatic = test.w.localStorage.getItem('elevon-motion');
-  await test.finish();
-  const reload = await open({ preference: savedStatic }); await reload.visible(true);
-  equal(reload.select.value, 'static', 'Reload restores the visitor choice to leave the ecosystem static');
-  equal(reload.element.dataset.active, 'false', 'Restored static choice never starts decorative animation');
-  await reload.finish();
-}
-{
-  const test = await open({ preference: 'static', legacy: 'animated' }); await test.visible(true);
-  equal(test.select.value, 'static', 'New static preference takes precedence over legacy animation');
+  await test.hidden(true); equal(test.animation(), 'none', 'Hidden browser tab stops animation');
+  await test.hidden(false); check(test.animation().includes('ecosystem-core-float'), 'Visible browser tab resumes animation');
+  await test.reduced(true);
+  equal(test.element.dataset.motion, 'static', 'Reduced-motion preference is still respected without a selector');
+  equal(test.element.dataset.active, 'false', 'Reduced motion stops decorative work');
+  equal(test.animation(), 'none', 'Reduced motion removes CSS animation');
+  await test.reduced(false); check(test.animation().includes('ecosystem-core-float'), 'Normal motion preference resumes automatic animation');
   await test.finish();
 }
 {
-  const test = await open({ reduced: true }); await test.visible(true);
-  equal(test.select.value, 'animated', 'Reduced-motion visitor keeps the default animation selection');
-  equal(test.element.dataset.motion, 'static', 'Reduced motion disables effective animation from the first visit');
-  equal(test.element.dataset.active, 'false', 'Default animation cannot override reduced motion');
+  const test = await open({ reduced: true });
+  equal(test.element.dataset.active, 'false', 'Reduced-motion visitor does not animate from the first frame');
+  equal(test.animation(), 'none', 'Reduced-motion visitor retains the entire static composition');
+  await test.pageHide(); await test.pageShow();
+  equal(test.element.dataset.active, 'false', 'Page restoration does not override reduced motion');
   await test.finish();
 }
 {
-  const test = await open({ storageBlocked: true }); await test.visible(true); await test.choose('animated');
-  equal(test.select.value, 'animated', 'Blocked storage does not prevent choosing animation for this visit');
-  equal(test.element.dataset.active, 'true', 'Current-visit animation works with blocked storage');
-  await test.finish();
-}
-
-
-{
-  const test = await open({ preference: 'animated', hidden: true }); await test.visible(true);
-  equal(test.element.dataset.active, 'false', 'Initially hidden document does not start decoration');
-  await test.hidden(false); equal(test.element.dataset.active, 'true', 'Initial hidden state resumes only when the tab becomes visible');
+  const test = await open({ hidden: true });
+  equal(test.element.dataset.active, 'false', 'Initially hidden document stays stopped');
+  await test.hidden(false); equal(test.element.dataset.active, 'true', 'Showing the initially hidden tab starts animation');
   await test.finish();
 }
 {
-  const test = await open({ preference: 'animated', noObserver: true });
-  equal(test.element.dataset.active, 'true', 'Missing observer API preserves the visible opted-in composition');
-  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, 'Missing observer API never blanks the scene');
-  await test.finish();
-}
-{
-  const test = await open({ preference: 'static' }); await test.visible(true);
-  equal(test.select.value, 'static', 'New document restores a saved static choice');
-  equal(test.element.dataset.active, 'false', 'Restored static choice stays stopped after visibility events');
+  const test = await open({ noObserver: true });
+  equal(test.element.dataset.active, 'true', 'Observer API fallback keeps automatic motion available');
+  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, 'Observer API fallback keeps the full scene');
   await test.finish();
 }
 
@@ -261,33 +199,30 @@ const pointerValues = test => {
   return ['--pointer-x', '--pointer-y', '--pointer-rotate-x', '--pointer-rotate-y'].map(name => Number.parseFloat(style.getPropertyValue(name)) || 0);
 };
 {
-  const test = await open({ preference: 'animated', width: 1440 }); await test.visible(true);
+  const test = await open({ width: 1440 });
   pointerEvent(test, 'pointerover'); pointerEvent(test, 'pointermove'); await tick();
-  const values = pointerValues(test);
-  check(values.some(value => value !== 0), 'Fine-pointer desktop receives subtle parallax');
-  check(values.every(value => Math.abs(value) <= 30), 'Pointer response remains bounded');
-  equal(test.requestedFrames, 0, 'Pointer updates do not schedule a JavaScript animation frame');
+  check(pointerValues(test).some(value => value !== 0), 'Fine-pointer desktop gets subtle parallax');
+  check(pointerValues(test).every(value => Math.abs(value) <= 30), 'Parallax stays bounded');
+  equal(test.requestedFrames, 0, 'Pointer updates do not schedule animation frames');
   test.w.dispatchEvent(new test.w.Event('resize')); await tick();
-  equal(pointerValues(test), [0, 0, 0, 0], 'Resize clears stale pointer bounds and orientation');
+  equal(pointerValues(test), [0,0,0,0], 'Resize clears stale pointer coordinates');
   pointerEvent(test, 'pointerover'); pointerEvent(test, 'pointermove'); await tick();
-  await test.hidden(true); equal(pointerValues(test), [0, 0, 0, 0], 'Hiding the tab resets pointer offset');
+  await test.hidden(true); equal(pointerValues(test), [0,0,0,0], 'Hiding the tab resets pointer offsets');
   await test.hidden(false); pointerEvent(test, 'pointerover'); pointerEvent(test, 'pointermove'); await tick();
   pointerEvent(test, 'pointerout'); await tick();
-  equal(pointerValues(test), [0, 0, 0, 0], 'Pointer exit resets orientation');
+  equal(pointerValues(test), [0,0,0,0], 'Pointer exit resets orientation');
   await test.finish();
 }
 for (const [label, options, pointerType] of [
-  ['static choice', { preference: 'static' }, 'mouse'],
-  ['reduced motion', { preference: 'animated', reduced: true }, 'mouse'],
-  ['touch-only device', { preference: 'animated', finePointer: false, width: 390 }, 'touch'],
-  ['touch event on desktop', { preference: 'animated', width: 1440 }, 'touch'],
+  ['reduced motion', { reduced: true }, 'mouse'],
+  ['touch-only mobile', { finePointer: false, width: 390 }, 'touch'],
+  ['touch event on desktop', { width: 1440 }, 'touch'],
 ]) {
-  const test = await open(options); await test.visible(true);
+  const test = await open(options);
   pointerEvent(test, 'pointerover', pointerType); pointerEvent(test, 'pointermove', pointerType); await tick();
-  equal(pointerValues(test), [0, 0, 0, 0], `${label}: no desktop pointer motion`);
+  equal(pointerValues(test), [0,0,0,0], `${label}: no desktop pointer interaction`);
   await test.finish();
 }
-
-console.log(`PASS: ${assertions} ecosystem assertions. Actual React component lifecycle tested in DOM; no browser layout or GPU measurement.`);
-console.log('  ✓ Animated default, persisted static/legacy choices, reduced motion, visible/hidden/offscreen pauses and full static composition');
-console.log('  ✓ Readable HTML cards, decorative core assets, canvas-free import graph and listener cleanup');
+console.log(`PASS: ${assertions} ecosystem assertions. Actual React lifecycle and CSS declarations tested in DOM; no browser layout or GPU measurement.`);
+console.log('  ✓ Automatic animation without a selector or stored motion settings; initial entry and page restore');
+console.log('  ✓ Reduced motion, visibility pauses, parallax bounds, DOM content, core assets and listener cleanup');

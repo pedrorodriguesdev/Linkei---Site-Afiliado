@@ -1,14 +1,14 @@
 /* A shallow CSS 3D stage: readable HTML cards, vector connections and one small core render. */
 .home-ecosystem{position:relative;grid-area:ecosystem;align-self:center;width:100%;min-width:0;margin:0;}
 .digital-ecosystem {
- --eco-ink:#292444;--eco-copy:#57516f;--eco-line:rgba(154,125,242,.48);
- --eco-glass:rgba(255,255,255,.71);--eco-glass-low:rgba(214,205,255,.48);
+ --eco-ink:#1b1535;--eco-copy:#332a4f;--eco-line:rgba(154,125,242,.48);
+ --eco-glass:rgba(255,255,255,.9);--eco-glass-low:rgba(224,216,255,.78);
  --eco-card-edge:rgba(255,255,255,.96);--eco-shadow:rgba(97,65,174,.19);
  --eco-purple:#8050ed;--eco-bright:#a881ff;--eco-highlight:rgba(255,255,255,.92);
  position:relative;display:block;width:100%;min-width:0;margin:0;isolation:isolate;
 }
 [data-theme=dark] .digital-ecosystem {
- --eco-ink:#f0edff;--eco-copy:#c4bddf;--eco-line:rgba(150,117,245,.6);
+ --eco-ink:#ffffff;--eco-copy:#f0ecff;--eco-line:rgba(150,117,245,.6);
  --eco-glass:rgba(42,40,85,.87);--eco-glass-low:rgba(48,36,98,.84);
  --eco-card-edge:rgba(184,163,255,.6);--eco-shadow:rgba(0,0,0,.35);
  --eco-purple:#ba99ff;--eco-bright:#ad88ff;--eco-highlight:rgba(225,211,255,.5);
@@ -61,12 +61,12 @@
 .digital-ecosystem .ecosystem-card::before {content:'';position:absolute;inset:3px;border-radius:17px;border-top:1px solid var(--eco-highlight);border-right:1px solid rgba(255,255,255,.4);pointer-events:none;}
 .digital-ecosystem .ecosystem-card::after {content:'';position:absolute;inset:0;background:linear-gradient(120deg,rgba(255,255,255,.18),transparent 35%,transparent 65%,rgba(255,255,255,.14));pointer-events:none;}
 .digital-ecosystem .ecosystem-card-heading {position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-bottom:13px;}
-.digital-ecosystem .ecosystem-card-heading h3 {font-size:clamp(13px,1.3vw,19px);font-weight:700;line-height:1.15;letter-spacing:-.04em;margin:0;color:var(--eco-ink);}
+.digital-ecosystem .ecosystem-card-heading h3 {font-size:clamp(15px,1.45vw,20px);font-weight:800;line-height:1.2;letter-spacing:-.025em;margin:0;color:var(--eco-ink);}
 .digital-ecosystem .card-icon {display:flex;align-items:center;justify-content:center;flex:none;width:29px;height:29px;border:1px solid rgba(255,255,255,.85);border-radius:9px;color:#fff;background:linear-gradient(135deg,#aa81ff,#7350e9 62%,#a58bff);box-shadow:inset 0 1px 5px #fff8,0 3px 8px #7553ba28;}
 .digital-ecosystem .card-icon svg {width:18px;height:18px;stroke-width:1.7;}
 .digital-ecosystem .card-dots {margin-left:auto;align-self:flex-start;color:#bba1ed;font-size:12px;line-height:1;letter-spacing:2px;}
 .digital-ecosystem .ecosystem-card ul {position:relative;z-index:1;display:grid;gap:7px;margin:0;padding:0;list-style:none;}
-.digital-ecosystem .ecosystem-card li {display:flex;align-items:center;gap:6px;color:var(--eco-copy);font-size:clamp(10px,.88vw,13px);line-height:1.35;white-space:nowrap;}
+.digital-ecosystem .ecosystem-card li {display:flex;align-items:center;gap:6px;color:var(--eco-copy);font-size:clamp(12px,.98vw,14px);font-weight:600;line-height:1.45;letter-spacing:0;white-space:nowrap;}
 .digital-ecosystem .ecosystem-card li>svg {width:13px;height:13px;color:var(--eco-purple);stroke-width:2.5;}
 .digital-ecosystem .ecosystem-card-symbol {position:absolute;z-index:1;right:13px;bottom:16px;width:27%;height:54px;display:flex;align-items:center;justify-content:center;color:var(--eco-purple);transform:rotateY(-10deg) rotateX(10deg);pointer-events:none;}
 .digital-ecosystem .ecosystem-card-symbol>svg {width:55px;height:55px;stroke-width:1.3;fill:rgba(166,135,248,.2);}
@@ -81,11 +81,7 @@
 .digital-ecosystem .tile-image {left:0;top:57%;width:9%;transform:rotateY(14deg) rotateZ(-9deg) translateZ(4px);}
 .digital-ecosystem .tile-users {right:1%;top:48%;width:9%;transform:rotateY(-15deg) rotateZ(5deg) translateZ(-5px);}
 .digital-ecosystem .tile-settings {right:7%;top:67%;width:9%;transform:rotateY(-15deg) rotateZ(8deg) translateZ(10px);}
-.digital-ecosystem .ecosystem-controls {position:relative;z-index:6;display:flex;min-height:44px;align-items:center;justify-content:center;gap:8px;margin-top:7px;}
-.digital-ecosystem .ecosystem-controls label {display:flex;align-items:center;gap:9px;font-size:11px;line-height:1.4;color:var(--body);}
-.digital-ecosystem .ecosystem-controls select {min-height:40px;border:1px solid var(--border-accent);border-radius:24px;background:var(--surface);color:var(--body);padding:7px 12px;font:inherit;cursor:pointer;}
-.digital-ecosystem .ecosystem-motion-note {font-size:10px;color:var(--muted);}
-.digital-ecosystem .ecosystem-caption {display:flex;align-items:center;justify-content:center;gap:12px;margin-top:1px;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--body);}
+.digital-ecosystem .ecosystem-caption {display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--eco-copy);}
 .digital-ecosystem .ecosystem-caption::before {content:'';height:1px;width:25px;background:var(--accent-gradient);}
 /* Create animations only in the running state. Initial entry and a manual
    static-to-animated change now use the same fresh animation creation path. */
@@ -109,12 +105,16 @@
 @media(min-width:768px) and (max-width:1100px) {
  .digital-ecosystem .ecosystem-card {padding:12px 11px 13px;border-radius:17px;}
  .digital-ecosystem .ecosystem-card-heading {gap:5px;margin-bottom:9px;}
+ .digital-ecosystem .card-dots {display:none;}
  .digital-ecosystem .card-icon {width:24px;height:24px;border-radius:8px;}.digital-ecosystem .card-icon svg {width:15px;height:15px;}
- .digital-ecosystem .ecosystem-card-heading h3 {font-size:13px;}
- .digital-ecosystem .ecosystem-card li {font-size:9px;gap:3px;}.digital-ecosystem .ecosystem-card li>svg {width:10px;height:10px;}
+ .digital-ecosystem .ecosystem-card-heading h3 {font-size:15px;}
+ .digital-ecosystem .ecosystem-card li {font-size:12px;gap:4px;}.digital-ecosystem .ecosystem-card li>svg {width:10px;height:10px;}
  .digital-ecosystem .ecosystem-card ul {gap:5px;}
- .digital-ecosystem .ecosystem-card-symbol {right:8px;bottom:10px;width:25%;height:38px;}.digital-ecosystem .ecosystem-card-symbol>svg {width:38px;height:38px;}.digital-ecosystem .ecosystem-bars {height:36px;gap:2px;}
- .digital-ecosystem .card-tools .ecosystem-card-symbol {right:9px;width:24%;height:45px;}.digital-ecosystem .card-tools .ecosystem-card-symbol>svg {width:45px;height:45px;}
+ .digital-ecosystem .ecosystem-card-symbol {display:none;}.digital-ecosystem .ecosystem-card-symbol>svg {width:38px;height:38px;}.digital-ecosystem .ecosystem-bars {height:36px;gap:2px;}
+ .digital-ecosystem .card-tools .ecosystem-card-symbol {display:none;}.digital-ecosystem .card-tools .ecosystem-card-symbol>svg {width:45px;height:45px;}
+}
+@media(min-width:768px) and (max-width:900px){
+ .digital-ecosystem .ecosystem-card-heading .card-icon{display:none;}
 }
 @media(max-width:767px) {
  .home-ecosystem{width:100%;max-width:430px;margin:0 auto;justify-self:center;}
@@ -126,25 +126,25 @@
  .digital-ecosystem .ecosystem-orbits {top:2%;height:90%;}
  .digital-ecosystem .card-marketing {left:0;top:3%;width:47%;transform:rotateZ(-3deg);z-index:4;}
  .digital-ecosystem .card-technology {right:0;top:5%;width:47%;transform:rotateZ(3deg);z-index:4;}
- .digital-ecosystem .card-tools {left:16%;top:67%;width:70%;transform:rotateZ(-2deg);z-index:5;}
+ .digital-ecosystem .card-tools {left:16%;top:63%;width:70%;transform:rotateZ(-2deg);z-index:5;}
  .digital-ecosystem .ecosystem-card {padding:10px 10px 11px;border-radius:15px;box-shadow:inset 0 1px 7px var(--eco-highlight),0 10px 17px -12px var(--eco-shadow);}
  .digital-ecosystem .ecosystem-card-heading {gap:5px;margin-bottom:8px;}
- .digital-ecosystem .ecosystem-card-heading h3 {font-size:13px;letter-spacing:-.04em;}
- .digital-ecosystem .card-icon {width:23px;height:23px;border-radius:7px;}.digital-ecosystem .card-icon svg {width:14px;height:14px;}
- .digital-ecosystem .card-dots {font-size:9px;letter-spacing:1px;}
- .digital-ecosystem .ecosystem-card ul {gap:4px;}.digital-ecosystem .ecosystem-card li {font-size:10px;line-height:1.35;gap:4px;}.digital-ecosystem .ecosystem-card li>svg {width:11px;height:11px;}
+ .digital-ecosystem .ecosystem-card-heading h3 {font-size:14px;letter-spacing:-.02em;}
+ .digital-ecosystem .card-icon {width:24px;height:24px;border-radius:7px;}.digital-ecosystem .card-icon svg {width:14px;height:14px;}
+ .digital-ecosystem .card-dots {display:none;}
+ .digital-ecosystem .ecosystem-card ul {gap:4px;}.digital-ecosystem .ecosystem-card li {font-size:12px;line-height:1.45;gap:4px;}.digital-ecosystem .ecosystem-card li>svg {width:11px;height:11px;}
  .digital-ecosystem .ecosystem-card-symbol {display:none;}
  .digital-ecosystem .card-tools .ecosystem-card {padding:10px 13px;}
  .digital-ecosystem .card-tools .ecosystem-card-heading {margin-bottom:5px;}
  .digital-ecosystem .card-tools .ecosystem-card-symbol {display:flex;right:15px;bottom:16px;width:25%;height:44px;}.digital-ecosystem .card-tools .ecosystem-card-symbol>svg {width:44px;height:44px;}
  .digital-ecosystem .ecosystem-tile {width:33px;border-radius:9px;}.digital-ecosystem .tile-play {left:3%;top:49%;transform:rotate(-9deg);}.digital-ecosystem .tile-chart {right:3%;top:45%;width:33px;transform:rotate(8deg);}
  .digital-ecosystem .tile-image,.digital-ecosystem .tile-users,.digital-ecosystem .tile-settings {display:none;}
- .digital-ecosystem .ecosystem-controls {margin-top:7px;}
- .digital-ecosystem .ecosystem-caption {font-size:7px;letter-spacing:.14em;}
+ .digital-ecosystem .ecosystem-caption {margin-top:22px;font-size:10px;letter-spacing:.08em;}
  .digital-ecosystem[data-motion=animated][data-active=true] .ecosystem-orbits {animation:none;}
 }
+@media(max-width:389px){.digital-ecosystem .card-tools .ecosystem-card-symbol{display:none;}}
 @media(max-width:359px) {
- .digital-ecosystem .ecosystem-card-heading h3 {font-size:12px;}.digital-ecosystem .ecosystem-card li {font-size:9px;}.digital-ecosystem .card-dots {display:none;}
+ .digital-ecosystem .ecosystem-card-heading h3 {font-size:14px;}.digital-ecosystem .ecosystem-card li {font-size:12px;}.digital-ecosystem .card-dots {display:none;}
  .digital-ecosystem .ecosystem-card {padding-inline:8px;}.digital-ecosystem .card-tools .ecosystem-card {padding-inline:11px;}
 }
 @media(prefers-reduced-motion:reduce) {

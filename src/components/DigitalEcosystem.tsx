@@ -2,18 +2,6 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { BarChart3, Check, Code2, Cpu, Image, Layers3, Megaphone, Play, Settings, Users } from 'lucide-react';
 import './digital-ecosystem.css';
 
-type MotionPreference = 'static' | 'animated';
-function savedMotion(): MotionPreference {
-  try {
-    const saved = localStorage.getItem('elevon-motion');
-    if (saved === 'animated' || saved === 'static') return saved;
-    if (saved === null) {
-      const legacy = localStorage.getItem('elevon-earth');
-      if (legacy === 'animated' || legacy === 'static') return legacy;
-    }
-    return 'animated';
-  } catch { return 'animated'; }
-}
 const cards = [
   { kind: 'marketing', title: 'Marketing', Icon: Megaphone, items: ['Estratégias', 'Conteúdo', 'Audiência'] },
   { kind: 'technology', title: 'Tecnologia', Icon: Code2, items: ['Automação', 'Integrações', 'Produtividade'] },
@@ -22,14 +10,13 @@ const cards = [
 
 /** A CSS 3D scene with real HTML labels, SVG orbits and one small rendered core. */
 export default function DigitalEcosystem() {
-  const [preference, setPreference] = useState<MotionPreference>(savedMotion);
   const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [visible, setVisible] = useState(false);
   const [hidden, setHidden] = useState(() => document.hidden);
   const stage = useRef<HTMLDivElement>(null);
   const bounds = useRef<DOMRect | null>(null);
   const media = useRef<{ fine: MediaQueryList; wide: MediaQueryList } | null>(null);
-  const running = preference === 'animated' && !reduced && visible && !hidden;
+  const running = !reduced && visible && !hidden;
   const active = useRef(running);
   active.current = running;
 
@@ -108,13 +95,7 @@ export default function DigitalEcosystem() {
     style.setProperty('--pointer-rotate-x', `${(-y * 2).toFixed(2)}deg`);
     style.setProperty('--pointer-rotate-y', `${(x * 2.5).toFixed(2)}deg`);
   };
-  const choose = (value: string) => {
-    const next = value === 'animated' ? 'animated' : 'static';
-    setPreference(next);
-    try { localStorage.setItem('elevon-motion', next); } catch { /* Selection still works for this visit. */ }
-  };
-
-  return <figure className="digital-ecosystem" data-motion={preference === 'animated' && !reduced ? 'animated' : 'static'} data-active={String(running)} aria-label="Ecossistema digital ilustrativo">
+  return <figure className="digital-ecosystem" data-motion={reduced ? 'static' : 'animated'} data-active={String(running)} aria-label="Ecossistema digital ilustrativo">
     <div ref={stage} className="ecosystem-stage" onPointerEnter={enter} onPointerMove={move} onPointerLeave={resetPointer} onPointerCancel={resetPointer}>
       <div className="ecosystem-scene">
         <div className="ecosystem-floor-glow" aria-hidden="true" />
@@ -136,7 +117,6 @@ export default function DigitalEcosystem() {
         })}
       </div>
     </div>
-    <div className="ecosystem-controls"><label>Animação <select aria-label="Animação do ecossistema" value={preference} onChange={event => choose(event.target.value)}><option value="animated">Animado</option><option value="static">Estático</option></select></label>{reduced && <span className="ecosystem-motion-note">Movimento reduzido</span>}</div>
     <figcaption className="ecosystem-caption">Seu próximo passo é digital</figcaption>
   </figure>;
 }
