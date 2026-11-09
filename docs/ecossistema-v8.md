@@ -12,8 +12,8 @@ O núcleo central é uma ilustração de vidro violeta gerada para esta composi�
 
 ## Movimento e preferências
 
-- O padrão continua **Estático**. O seletor passou de “Globo” para **Animação**, com as opções Estático/Animado.
-- Escolhas explícitas são salvas em `elevon-motion`. Se essa chave ainda não existir, uma escolha antiga `animated` de `elevon-earth` é respeitada. Valores inválidos, modo automático antigo ou armazenamento indisponível resultam em estático. Um valor novo estático tem prioridade sobre uma escolha antiga animada.
+- O padrão é **Animado**, seguido de **Estático** na ordem do seletor. O seletor passou de “Globo” para **Animação**, com as opções Animado/Estático.
+- Escolhas explícitas são salvas em `elevon-motion`. Se essa chave ainda não existir, uma escolha explícita antiga `animated` ou `static` de `elevon-earth` é respeitada. Sem escolha explícita, valores inválidos, modo automático antigo ou armazenamento indisponível resultam em animado. As escolhas explícitas antigas estático/animado são respeitadas. Um valor novo estático tem prioridade sobre uma escolha antiga animada.
 - No modo animado, o núcleo e os cartões flutuam poucos pixels, as órbitas oscilam suavemente e o brilho varia em opacidade. A interface reduz os efeitos no celular.
 - O parallax só responde a mouse em desktop com ponteiro preciso, animação habilitada e hero visível. Eventos atualizam variáveis CSS via ref; transições suavizam o movimento. Não há estado React por movimento, leituras de layout em cada movimento ou loop JavaScript de frames.
 - `IntersectionObserver` e `visibilitychange` pausam as animações fora da tela ou com a aba oculta. As preferências de movimento reduzido prevalecem, sem apagar a escolha salva. Listeners e observers são removidos ao desmontar.
@@ -54,7 +54,7 @@ O JS inicial cresce ligeiramente com o novo componente; a redução vem das imag
 
 ## Testes e limitações
 
-Passaram 667 verificações da aplicação e 243 do ecossistema: **910 no total**. A suíte verifica persistência, migração, armazenamento bloqueado, modo estático, preferência de movimento reduzido, visibilidade da aba/viewport, parallax restrito, limpeza de listeners, ausência de RAF e WebGL, arquivos de imagem e conteúdo dos cartões. Navegação, busca, filtros, páginas de produto, parâmetros dos links comerciais e artes internas continuam cobertos.
+Passaram 667 verificações da aplicação e 295 do ecossistema: **962 no total**. A suíte verifica persistência, migração, armazenamento bloqueado, modo estático, preferência de movimento reduzido, visibilidade da aba/viewport, parallax restrito, limpeza de listeners, ausência de RAF e WebGL, arquivos de imagem e conteúdo dos cartões. Navegação, busca, filtros, páginas de produto, parâmetros dos links comerciais e artes internas continuam cobertos.
 
 TypeScript, Vite e geração das 11 entradas estáticas passaram. O artefato foi inspecionado para confirmar a ausência do renderer e das imagens antigas. As propriedades CSS e a arquitetura responsiva foram revisadas; jsdom não calcula o layout visual real.
 

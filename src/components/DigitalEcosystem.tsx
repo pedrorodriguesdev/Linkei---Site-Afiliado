@@ -6,9 +6,13 @@ type MotionPreference = 'static' | 'animated';
 function savedMotion(): MotionPreference {
   try {
     const saved = localStorage.getItem('elevon-motion');
-    if (saved !== null) return saved === 'animated' ? 'animated' : 'static';
-    return localStorage.getItem('elevon-earth') === 'animated' ? 'animated' : 'static';
-  } catch { return 'static'; }
+    if (saved === 'animated' || saved === 'static') return saved;
+    if (saved === null) {
+      const legacy = localStorage.getItem('elevon-earth');
+      if (legacy === 'animated' || legacy === 'static') return legacy;
+    }
+    return 'animated';
+  } catch { return 'animated'; }
 }
 const cards = [
   { kind: 'marketing', title: 'Marketing', Icon: Megaphone, items: ['Estratégias', 'Conteúdo', 'Audiência'] },
@@ -112,7 +116,7 @@ export default function DigitalEcosystem() {
         })}
       </div>
     </div>
-    <div className="ecosystem-controls"><label>Animação <select aria-label="Animação do ecossistema" value={preference} onChange={event => choose(event.target.value)}><option value="static">Estático</option><option value="animated">Animado</option></select></label>{reduced && <span className="ecosystem-motion-note">Movimento reduzido</span>}</div>
+    <div className="ecosystem-controls"><label>Animação <select aria-label="Animação do ecossistema" value={preference} onChange={event => choose(event.target.value)}><option value="animated">Animado</option><option value="static">Estático</option></select></label>{reduced && <span className="ecosystem-motion-note">Movimento reduzido</span>}</div>
     <figcaption className="ecosystem-caption">Seu próximo passo é digital</figcaption>
   </figure>;
 }

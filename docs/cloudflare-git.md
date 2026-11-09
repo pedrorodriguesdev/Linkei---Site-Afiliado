@@ -73,3 +73,11 @@ Um **Retry deployment** ajuda a testar o build e acesso do código, mas, sozinho
 - [Limitações conhecidas do Pages](https://developers.cloudflare.com/pages/platform/known-issues/)
 
 O site de documentação retornou HTTP 403 para este ambiente. As instruções foram conferidas no [repositório oficial `cloudflare/cloudflare-docs`](https://github.com/cloudflare/cloudflare-docs/tree/production/src/content/docs/pages), incluindo os arquivos de integração Git/GitHub, build e limitações. Isso permite orientar a recuperação, mas não substitui acesso autenticado à integração específica da conta.
+
+## Conferência da versão publicada
+
+Após o proprietário informar que o aviso desapareceu, a consulta HTTP pública a `https://ellevon.pages.dev/` respondeu 200, mas ainda referenciava `/assets/index-DGieGGI2.js`. Esse arquivo tinha 331.203 bytes, continha o componente antigo da Terra e não continha `digital-ecosystem`. O GitHub já estava em `e70a2a0`, com o V8. Isso confirma uma diferença entre o código enviado e o conteúdo servido naquele momento; não identifica sozinho se o deploy não foi disparado, falhou ou ainda não foi promovido à produção.
+
+O build agora gera `/version.json` com o commit da origem. No Cloudflare ele usa `CF_PAGES_COMMIT_SHA`; em builds locais, usa o HEAD do Git. Esse arquivo não contém credenciais. Depois da publicação, compare seu campo `commit` com o commit de `main` no GitHub. Para implantações antigas sem esse arquivo, a URL pode devolver o HTML da aplicação pelo fallback; isso não é uma confirmação de versão.
+
+Se o aviso sumiu mas o site continua antigo, abra **Deployments** e confira o commit e o status da implantação de produção mais recente. Uma repetição de um deploy antigo pode continuar usando o commit antigo. Se existir uma implantação recente da `main`, leia o log e confira se terminou com sucesso e se é produção. A integração do Cloudflare e o host do Sites são publicações independentes.

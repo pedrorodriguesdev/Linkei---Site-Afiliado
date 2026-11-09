@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 const data=await build({entryPoints:['src/data/products.ts'],bundle:true,platform:'node',format:'esm',write:false});
 const {products}=await import('data:text/javascript;base64,'+Buffer.from(data.outputFiles[0].text).toString('base64'));
@@ -14,4 +15,11 @@ for(const route of routes){
 fs.writeFileSync('dist/sitemap.xml','<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+routes.map(r=>`<url><loc>${origin+r.path}</loc></url>`).join('')+'</urlset>');
 fs.writeFileSync('dist/robots.txt',`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
 fs.writeFileSync('dist/_redirects','/* /index.html 200\n');
+// Expose only the public source revision so hosted builds can be verified directly.
+let commit = process.env.CF_PAGES_COMMIT_SHA || '';
+if (!commit) {
+ try { commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+ catch { commit = 'unknown'; }
+}
+fs.writeFileSync('dist/version.json', JSON.stringify({ commit }) + '\n');
 console.log(`Metadata and direct-entry HTML generated for ${routes.length} routes.`);

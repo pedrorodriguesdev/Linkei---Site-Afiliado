@@ -102,18 +102,20 @@ async function open(options = {}) {
   };
 }
 
-for (const [label, options] of [
-  ['new visitor', {}], ['saved static', { preference: 'static' }], ['invalid preference', { preference: 'invalid' }],
-  ['legacy automatic', { legacy: 'auto' }], ['legacy static', { legacy: 'static' }], ['blocked storage', { storageBlocked: true }],
+for (const [label, options, expected] of [
+  ['new visitor', {}, 'animated'], ['new mobile visitor', { width: 390, finePointer: false }, 'animated'],
+  ['saved static', { preference: 'static' }, 'static'], ['invalid preference', { preference: 'invalid' }, 'animated'],
+  ['empty preference', { preference: '' }, 'animated'], ['legacy automatic', { legacy: 'auto' }, 'animated'],
+  ['legacy static', { legacy: 'static' }, 'static'], ['blocked storage', { storageBlocked: true }, 'animated'],
 ]) {
   const test = await open(options); await test.visible(true);
-  equal(test.select.value, 'static', `${label}: motion defaults static`);
-  equal([...test.select.options].map(option => option.value), ['static', 'animated'], `${label}: offers static and animated modes`);
-  equal(test.element.dataset.motion, 'static', `${label}: decorative motion is disabled`);
-  equal(test.element.dataset.active, 'false', `${label}: no active animation work`);
+  equal(test.select.value, expected, `${label}: default animation respects explicit saved choices`);
+  equal([...test.select.options].map(option => option.value), ['animated', 'static'], `${label}: animated is the first option`);
+  equal(test.element.dataset.motion, expected, `${label}: effective motion matches the preference`);
+  equal(test.element.dataset.active, String(expected === 'animated'), `${label}: only animated mode runs while visible`);
   equal(test.requestedFrames, 0, `${label}: no JavaScript animation frame requested`);
   equal(test.element.querySelectorAll('canvas').length, 0, `${label}: no WebGL canvas`);
-  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, `${label}: full composition remains in static mode`);
+  equal(test.element.querySelectorAll('.ecosystem-card').length, 3, `${label}: full composition remains visible`);
   check(test.element.querySelector('.ecosystem-orbits'), `${label}: orbital connections remain visible`);
   check(![...test.element.querySelectorAll('img,source')].some(image => /\/earth\//.test((image.getAttribute('src') || '') + (image.getAttribute('srcset') || ''))), `${label}: no Earth texture URLs`);
   await test.finish();
@@ -151,7 +153,12 @@ for (const options of [{ preference: 'animated' }, { legacy: 'animated' }]) {
   equal(test.element.dataset.active, 'false', 'Static selection immediately pauses animation');
   equal(test.element.querySelectorAll('.ecosystem-card').length, 3, 'Changing to static retains the whole visual');
   equal(test.requestedFrames, 0, 'CSS-only animation does not introduce a JavaScript frame loop');
+  const savedStatic = test.w.localStorage.getItem('elevon-motion');
   await test.finish();
+  const reload = await open({ preference: savedStatic }); await reload.visible(true);
+  equal(reload.select.value, 'static', 'Reload restores the visitor choice to leave the ecosystem static');
+  equal(reload.element.dataset.active, 'false', 'Restored static choice never starts decorative animation');
+  await reload.finish();
 }
 {
   const test = await open({ preference: 'static', legacy: 'animated' }); await test.visible(true);
@@ -159,8 +166,10 @@ for (const options of [{ preference: 'animated' }, { legacy: 'animated' }]) {
   await test.finish();
 }
 {
-  const test = await open({ preference: 'animated', reduced: true }); await test.visible(true);
-  equal(test.element.dataset.active, 'false', 'Saved animation cannot override reduced motion');
+  const test = await open({ reduced: true }); await test.visible(true);
+  equal(test.select.value, 'animated', 'Reduced-motion visitor keeps the default animation selection');
+  equal(test.element.dataset.motion, 'static', 'Reduced motion disables effective animation from the first visit');
+  equal(test.element.dataset.active, 'false', 'Default animation cannot override reduced motion');
   await test.finish();
 }
 {
@@ -228,5 +237,5 @@ for (const [label, options, pointerType] of [
 }
 
 console.log(`PASS: ${assertions} ecosystem assertions. Actual React component lifecycle tested in DOM; no browser layout or GPU measurement.`);
-console.log('  ✓ Static default, persisted/legacy opt-in, reduced motion, visible/hidden/offscreen pauses and full static composition');
+console.log('  ✓ Animated default, persisted static/legacy choices, reduced motion, visible/hidden/offscreen pauses and full static composition');
 console.log('  ✓ Readable HTML cards, decorative core assets, canvas-free import graph and listener cleanup');
