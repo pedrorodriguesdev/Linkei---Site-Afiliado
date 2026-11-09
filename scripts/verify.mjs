@@ -152,11 +152,11 @@ for (const [route, title] of [['/', 'Descubra ferramentas'], ['/produtos', 'Expl
   check($(dom, 'h1').textContent.includes(title), `${route}: correct main content`);
   equal($$(dom, 'header .desktop-nav a').length, 5, `${route}: shared navigation`);
   check($(dom, 'footer'), `${route}: shared footer`);
-  check(!$(dom, 'canvas'), `${route}: unavailable WebGL API retains the static fallback`);
+  check(!$(dom, 'canvas'), `${route}: page requires no WebGL canvas`);
   if (route === '/redes') equal($$(dom, '.social-card a').map(link => link.href), ['https://www.instagram.com/elevon.n/', 'https://www.tiktok.com/@llooping0', 'https://x.com/LinkouDigital'], 'Exact three official social destinations');
   dom.window.close();
 }
-messages.push('All 11 valid routes, shared navigation/footer, page metadata, WebGL-unavailable fallback and official social links');
+messages.push('All 11 valid routes, shared navigation/footer, page metadata, canvas-free rendering and official social links');
 
 // These are client DOM checks, not a claim of layout validation at these widths.
 // The same accessible content and distinct responsive artwork must exist at each breakpoint.
@@ -195,8 +195,10 @@ for (const width of [360, 390, 430, 768, 1024, 1440]) {
 equal(new Set(heroSources.values()).size, 3, 'Internal pages use three distinct illustration assets');
 {
   const home = await open('/');
-  check($(home, '.home-earth .earth-visual'), 'Homepage retains the existing Earth component');
-  check($(home, 'select[aria-label="Movimento do globo"]'), 'Homepage retains the animation preference selector');
+  check($(home, '.digital-ecosystem'), 'Homepage shows the new Digital Ecosystem');
+  equal($$(home, '.earth-visual,canvas').length, 0, 'Homepage no longer mounts an Earth renderer');
+  equal($$(home, '.ecosystem-card h3').map(title => title.textContent), ['Marketing', 'Tecnologia', 'Ferramentas'], 'Homepage keeps the three conceptual category cards');
+  check($(home, 'select[aria-label="Animação do ecossistema"]'), 'Homepage offers an ecosystem animation preference selector');
   equal($$(home, '.internal-page-art').length, 0, 'Homepage does not collect internal-page illustrations');
   home.window.close();
   const catalogPage = await open('/produtos');

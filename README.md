@@ -2,7 +2,7 @@
 
 Plataforma de descoberta e indicação de seis produtos digitais, em português brasileiro.
 
-O globo inicia **estático por padrão**. O visitante pode escolher **Animado** no seletor; essa escolha explícita fica salva para as próximas visitas. O antigo modo automático, preferências inválidas e armazenamento indisponível usam a imagem estática; movimento reduzido continua pausando a animação.
+A página inicial usa o **Ecossistema Digital V8**: cartões HTML em CSS 3D, órbitas SVG e um pequeno núcleo de vidro pré-renderizado. Inicia **estático por padrão**; o seletor **Animação** permite animar e salva a escolha em `elevon-motion`, respeitando movimento reduzido. Preferências explícitas antigas de `elevon-earth` são lidas apenas como migração. A Terra e o Three.js foram retirados do código e do build. Os relatos V2–V7 abaixo documentam versões históricas; a arquitetura atual está em [docs/ecossistema-v8.md](docs/ecossistema-v8.md). Para o aviso de conexão Git do Cloudflare, veja [docs/cloudflare-git.md](docs/cloudflare-git.md).
 
 ## Desenvolvimento
 

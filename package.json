@@ -7,20 +7,18 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build && node scripts/static-routes.mjs",
     "check": "tsc -b",
-    "verify": "node scripts/verify.mjs && node scripts/verify-earth.mjs",
-    "verify:earth": "node scripts/verify-earth.mjs"
+    "verify": "node scripts/verify.mjs && node scripts/verify-ecosystem.mjs",
+    "verify:ecosystem": "node scripts/verify-ecosystem.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.0",
-    "three": "^0.180.0"
+    "react-router-dom": "^7.6.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^4.5.0",
     "jsdom": "^31.0.0",
     "typescript": "~5.8.3",
